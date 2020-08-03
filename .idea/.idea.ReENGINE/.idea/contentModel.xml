@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ContentModelStore">
+    <e p="C:\Users\Giovanni Giacomo\AppData\Local\JetBrains\Rider2020.2\extResources" t="IncludeRecursive" />
+    <e p="C:\Users\Giovanni Giacomo\AppData\Local\JetBrains\Rider2020.2\resharper-host\Local\Transient\ReSharperHost\v202\SolutionCaches\_ReENGINE.-1284331649.00" t="ExcludeRecursive" />
+    <e p="C:\Users\Giovanni Giacomo\OneDrive\Documents\ReENGINE" t="IncludeFlat">
+      <e p="packages" t="ExcludeRecursive" />
+      <e p="ReENGINE" t="IncludeRecursive">
+        <e p="Main.cpp" t="Include" />
+        <e p="ReENGINE.vcxproj" t="IncludeRecursive" />
+        <e p="Source" t="Include">
+          <e p="Collections" t="Include">
+            <e p="Array.hpp" t="Include" />
+            <e p="Char.cpp" t="Include" />
+            <e p="Char.hpp" t="Include" />
+            <e p="List.hpp" t="Include" />
+            <e p="Map.hpp" t="Include" />
+            <e p="String.cpp" t="Include" />
+            <e p="String.hpp" t="Include" />
+          </e>
+          <e p="Core" t="Include">
+            <e p="Debug" t="Include">
+              <e p="Assert.cpp" t="Include" />
+              <e p="Assert.hpp" t="Include" />
+              <e p="Debug.hpp" t="Include" />
+            </e>
+            <e p="GameManager.hpp" t="Include" />
+            <e p="Hash" t="Include">
+              <e p="FNV.cpp" t="Include" />
+              <e p="FNV.hpp" t="Include" />
+            </e>
+            <e p="Manager.hpp" t="Include" />
+            <e p="NewtonManager.cpp" t="Include" />
+            <e p="NewtonManager.hpp" t="Include" />
+            <e p="Pointer.hpp" t="Include" />
+          </e>
+          <e p="Localization" t="Include">
+            <e p="Language.cpp" t="Include" />
+            <e p="Language.hpp" t="Include" />
+            <e p="LocalizationManager.cpp" t="Include" />
+            <e p="LocalizationManager.hpp" t="Include" />
+          </e>
+          <e p="Math" t="Include">
+            <e p="Color.h" t="Include" />
+            <e p="Math.cpp" t="Include" />
+            <e p="Math.h" t="Include" />
+            <e p="Matrix.cpp" t="Include" />
+            <e p="Matrix.h" t="Include" />
+            <e p="Transform.h" t="Include" />
+            <e p="Vector.cpp" t="Include" />
+            <e p="Vector.h" t="Include" />
+            <e p="Vector3.cpp" t="Include" />
+            <e p="Vector3.h" t="Include" />
+            <e p="Vector4.h" t="Include" />
+          </e>
+          <e p="Memory" t="Include">
+            <e p="DefaultAllocator.cpp" t="Include" />
+            <e p="DefaultAllocator.hpp" t="Include" />
+            <e p="Memory.cpp" t="Include" />
+            <e p="Memory.hpp" t="Include" />
+            <e p="MemoryManager.cpp" t="Include" />
+            <e p="MemoryManager.hpp" t="Include" />
+            <e p="StackAllocator.cpp" t="Include" />
+            <e p="StackAllocator.hpp" t="Include" />
+          </e>
+          <e p="Platform" t="Include">
+            <e p="HAL.hpp" t="Include" />
+            <e p="Win32" t="Include">
+              <e p="Platform.hpp" t="Include" />
+              <e p="Timer.cpp" t="Include" />
+              <e p="Timer.hpp" t="Include" />
+              <e p="Window.cpp" t="Include" />
+              <e p="Window.hpp" t="Include" />
+            </e>
+          </e>
+        </e>
+        <e p="x64\Debug" t="ExcludeRecursive" />
+      </e>
+      <e p="ReENGINE.sln" t="IncludeFlat" />
+      <e p="x64\Debug" t="ExcludeRecursive" />
+    </e>
+  </component>
+</project>

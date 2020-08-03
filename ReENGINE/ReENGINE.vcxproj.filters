@@ -1,0 +1,152 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source">
+      <UniqueIdentifier>{7dec599f-a838-4e9b-a694-8c2cdd1bbdaf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Core">
+      <UniqueIdentifier>{e707edb9-4635-4498-b1ea-5b8833716e78}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Platform">
+      <UniqueIdentifier>{353b7672-8123-4380-90ff-5b12c1e8ac68}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Platform\Win32">
+      <UniqueIdentifier>{30cd6b41-a2d8-4bbb-ad49-030530013c84}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Platform\Collections">
+      <UniqueIdentifier>{df65e47f-cee4-4bbb-811f-c19541bfcb94}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Core\Debug">
+      <UniqueIdentifier>{847c9a43-3798-4f73-8a19-4ed473b5f08b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Core\Memory">
+      <UniqueIdentifier>{dd879d4f-7641-462d-8e8a-c2c15fae3cc7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Platform\Collections\New">
+      <UniqueIdentifier>{c3421a0c-e334-41c1-8583-6ced5df3a39c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Core\Localization">
+      <UniqueIdentifier>{c24be85f-2c06-4aad-965c-02c171a37823}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Core\Hash">
+      <UniqueIdentifier>{8d2a5497-3bfc-4b60-9ccc-2c95bda93ed0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Core\Parser">
+      <UniqueIdentifier>{56a991ca-0a1b-4fc3-bdb4-1a779765e10d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Core\String">
+      <UniqueIdentifier>{27072f0e-161b-4921-9ef9-d8323f8af848}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Renderer">
+      <UniqueIdentifier>{99c4457d-175d-4c07-975c-ae540421d6d9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\SDK">
+      <UniqueIdentifier>{51d18e9e-0654-4f56-8741-5813d15f76f8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source\Renderer\DirectX">
+      <UniqueIdentifier>{ae34c4fe-b802-4be4-90f2-557178e8e373}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source\Core\NewtonManager.cpp">
+      <Filter>Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Source\Platform\Win32\Window.cpp">
+      <Filter>Source\Platform\Win32</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Platform\Win32\Timer.cpp">
+      <Filter>Source\Platform\Win32</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Core\Hash\FNV.cpp">
+      <Filter>Source\Core\Hash</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Core\Debug\Assert.cpp" />
+    <ClCompile Include="Source\Memory\DefaultAllocator.cpp">
+      <Filter>Source\Core\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Memory\Memory.cpp" />
+    <ClCompile Include="Source\Memory\MemoryManager.cpp">
+      <Filter>Source\Core\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Memory\StackAllocator.cpp">
+      <Filter>Source\Core\Memory</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Localization\Language.cpp" />
+    <ClCompile Include="Source\Localization\LocalizationManager.cpp">
+      <Filter>Source\Core\Localization</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Math\Math.cpp" />
+    <ClCompile Include="Source\Math\Matrix.cpp" />
+    <ClCompile Include="Source\Math\Vector.cpp" />
+    <ClCompile Include="Source\Math\Vector3.cpp" />
+    <ClCompile Include="Source\Core\Entity.cpp" />
+    <ClCompile Include="Source\Components\TransformComponent.cpp" />
+    <ClCompile Include="Source\Graphics\Renderer.cpp" />
+    <ClCompile Include="Source\Core\World.cpp" />
+    <ClCompile Include="Source\String\Character.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Source\Core\NewtonManager.hpp">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\Manager.hpp">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Platform\Win32\Timer.hpp">
+      <Filter>Source\Platform\Win32</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\GameManager.hpp">
+      <Filter>Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\Debug\Debug.hpp">
+      <Filter>Source\Core\Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\Hash\FNV.hpp">
+      <Filter>Source\Core\Hash</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Platform\HAL.hpp">
+      <Filter>Source\Platform</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Platform\Win32\Platform.hpp">
+      <Filter>Source\Platform\Win32</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Core\Debug\Assert.hpp" />
+    <ClInclude Include="Source\Memory\DefaultAllocator.hpp">
+      <Filter>Source\Core\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Memory\Memory.hpp" />
+    <ClInclude Include="Source\Memory\MemoryManager.hpp">
+      <Filter>Source\Core\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Memory\StackAllocator.hpp">
+      <Filter>Source\Core\Memory</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Localization\Language.hpp" />
+    <ClInclude Include="Source\Localization\LocalizationManager.hpp">
+      <Filter>Source\Core\Localization</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Memory\Allocator.hpp" />
+    <ClInclude Include="Source\Platform\Win32\Window.hpp">
+      <Filter>Source\Platform\Win32</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Platform\Window.hpp" />
+    <ClInclude Include="Source\Platform\Timer.hpp" />
+    <ClInclude Include="Source\Core\Entity.hpp" />
+    <ClInclude Include="Source\Math\Color.hpp" />
+    <ClInclude Include="Source\Math\Math.hpp" />
+    <ClInclude Include="Source\Math\Matrix.hpp" />
+    <ClInclude Include="Source\Math\Transform.hpp" />
+    <ClInclude Include="Source\Math\Vector.hpp" />
+    <ClInclude Include="Source\Math\Vector3.hpp" />
+    <ClInclude Include="Source\Math\Vector4.hpp" />
+    <ClInclude Include="Source\Core\Component.hpp" />
+    <ClInclude Include="Source\Components\TransformComponent.hpp" />
+    <ClInclude Include="Source\Graphics\Renderer.hpp" />
+    <ClInclude Include="Source\Core\World.hpp" />
+    <ClInclude Include="Source\String\Character.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+</Project>
