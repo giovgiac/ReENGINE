@@ -34,6 +34,7 @@
     <ClInclude Include="Source\Core\Debug\Debug.hpp" />
     <ClInclude Include="Source\Core\GameManager.hpp" />
     <ClInclude Include="Source\Core\Hash\FNV.hpp" />
+    <ClInclude Include="Source\Core\Result.hpp" />
     <ClInclude Include="Source\Core\World.hpp" />
     <ClInclude Include="Source\Graphics\Renderer.hpp" />
     <ClInclude Include="Source\Localization\LocalizationManager.hpp" />

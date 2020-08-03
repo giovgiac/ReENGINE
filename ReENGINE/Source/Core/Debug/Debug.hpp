@@ -67,7 +67,7 @@ namespace Re
 
 				// Write to Buffer and Create MessageBox
 				snprintf(pBuffer, bufferSize, pStr, args...);
-				MessageBox(nullptr, pBuffer, NTEXT("Newton Error"), MB_OK);
+				MessageBox(nullptr, pBuffer, NTEXT("ReENGINE Error"), MB_OK);
 
 				// Delete Buffer
 				delete[] pBuffer;

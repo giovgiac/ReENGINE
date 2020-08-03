@@ -10,177 +10,121 @@
 
 #pragma once
 
-#include "Core/GameManager.hpp"
+#include "Core/Debug/Assert.hpp"
 
-namespace Re {
-	/* 
-	 * Win32Window Class
-	 *
-	 * This class is responsible for creating objects that represent
-	 * and/or abstract Win32 windows. It is capable of creating them
-	 * and also sending and handling messages. 
-	 *
-	 */
-	class Win32Window {
-	protected:
-		HWND		_hWnd;
-		HINSTANCE	_hInstance;
-		LPCSTR		_title;
-		i32			_width;
-		i32			_height;
-		bool		_resizing = false;
-		bool		_windowed;
+namespace Re 
+{
+	namespace Platform
+	{
+		enum class WindowResult
+		{
+			Success = 0,
+			Failure = 1
+		};
 
-	public:
-		/* 
-		 * Win32Window Constructor
-		 *
-		 * This constructor initializes the object's parameters to the
-		 * passed in values and also sets the mainWnd pointer to point
-		 * to this window object. 
-		 *
-		 * HINSTANCE hInstance: the instance of the main application.
-		 * LPCSTR title: the title to be on the window's bar.
-		 * i32 width: the desired width for the window.
-		 * i32 height: the desired height for the window.
-		 * bool windowed: whether or not the window should be windowed.
+		/*
+		 * @brief This class is responsible for creating objects that represent
+		 * and/or abstract Win32 windows. It is capable of creating them
+		 * and also sending and handling messages.
 		 *
 		 */
-		Win32Window(HINSTANCE hInstance, LPCSTR title, i32 width, i32 height, bool windowed = true);
+		class Win32Window 
+		{
+		private:
+			HWND		_hWnd;
+			HINSTANCE	_hInstance;
+			LPCSTR		_title;
+			i32			_width;
+			i32			_height;
+			bool		_shouldClose;
 
-		/* 
-		 * Win32Window CreateDisplay Method
-		 *
-		 * This method registers and initializes a window with Windows.
-		 *
-		 * i32 nCmdShow: the code that represents the initial state of the window.
-		 *
-		 * return: true if window is created successfully, false otherwise. 
-		 *
-		 */
-		NRESULT CreateDisplay(i32 nCmdShow);
+		public:
+			/*
+			 * @brief This constructor initializes the object's parameters to the
+			 * passed in values.
+			 *
 
-		/* 
-		 * Win32Window GetHandler Method
-		 * 
-		 * This method is a getter for the _hWnd parameter.
-		 *
-		 * return: the handler to the window object. 
-		 *
-		 */
-		INLINE HWND GetHandle() { return _hWnd; }
+			 *
+			 */
+			Win32Window();
 
-		/* 
-		 * Win32Window GetInstance Method
-		 *
-		 * This method is a getter for the _hInstance parameter.
-		 *
-		 * return: the instance of the window object. 
-		 *
-		 */
-		INLINE HINSTANCE GetInstance() { return _hInstance; }
+			/*
+			 * @brief This method registers and initializes a window with Windows.
+			 *
+			 * @param title: the title to be on the window's bar.
+			 * @param width: the desired width for the window.
+			 * @param height: the desired height for the window.
+			 * @param nCmdShow: the code that represents the initial state of the window.
+			 *
+			 * @return true if window is created successfully, false otherwise.
+			 *
+			 */
+			WindowResult Startup(LPCSTR title, i32 width, i32 height, i32 nCmdShow);
 
-		/* 
-		 * Win32Window GetTitle Method
-		 *
-		 * This method is a getter for the _title parameter.
-		 *
-		 * return: the title of the window object. 
-		 *
-		 */
-		INLINE LPCSTR GetTitle() { return _title; }
+			void Shutdown();
 
-		/* 
-		 * Win32Window GetWidth Method
-		 *
-		 * This method is a getter for the _width parameter.
-		 *
-		 * return: the width of the window object. 
-		 *
-		 */
-		INLINE u32 GetWidth() { return _width; }
+			/*
+			 * @brief This method is a getter for whether this window should close.
+			 *
+			 * @return if the window should close or not.
+			 *
+			 */
+			INLINE bool GetShouldClose() const { return _shouldClose; }
 
-		/* 
-		 * Win32Window GetHeight Method
-		 *
-		 * This method is a getter for the _height parameter.
-		 *
-		 * return: the height of the window object. 
-		 *
-		 */
-		INLINE u32 GetHeight() { return _height; }
+			/*
+			 * @brief This method is a getter for the hWnd parameter.
+			 *
+			 * @return the handler to the window object.
+			 *
+			 */
+			INLINE HWND GetHandle() const { return _hWnd; }
 
-		/* 
-		 * Win32Window GetWindowed Method
-		 *
-		 * This method is a getter for the _windowed parameter.
-		 *
-		 * return: true if in windowed mode, false if fullscreen. 
-		 *
-		 */
-		INLINE bool GetWindowed() { return _windowed; }
+			/*
+			 * @brief This method is a getter for the hInstance parameter.
+			 *
+			 * @return the instance of the window object.
+			 *
+			 */
+			INLINE HINSTANCE GetInstance() const { return _hInstance; }
 
-		/* 
-		 * Win32Window SetWindowed Method
-		 *
-		 * This method is a setter for the _windowed parameter.
-		 *
-		 * const bool value: whether or not the window should be windowed.
-		 *
-		 * return: nothing. 
-		 *
-		 */
-		INLINE void SetWindowed(const bool value) { _windowed = value; }
+			/*
+			 * @brief This method is a getter for the width parameter.
+			 *
+			 * @return the width of the window object.
+			 *
+			 */
+			INLINE i32 GetWidth() const { return _width; }
 
-		/* 
-		 * Win32Window MessageLoop Method
-		 *
-		 * This virtual method is responsible for handling the idle state of the
-		 * window object, sending messages and initializing the main game
-		 * engine loop.
-		 *
-		 * Core::GameManager* game: the pointer to the game object.
-		 *
-		 * return: an integer representing the wParam parameter of the message. 
-		 *
-		 */
-		virtual i32 MessageLoop(Core::GameManager* game) = 0;
+			/*
+			 * @brief This method is a getter for the height parameter.
+			 *
+			 * @return the height of the window object.
+			 *
+			 */
+			INLINE i32 GetHeight() const { return _height; }
 
-		/* 
-		 * Win32Window DisplayProcedure Callback
-		 *
-		 * This callback function is responsible for handling the Win32Window
-		 * object's messages. It is called by the MainWndProc Callback and
-		 * effectively handles messages sent by the MessageLoop Method.
-		 *
-		 * HWND hWnd: the handle of the window.
-		 * u32 msg: the message received.
-		 * WPARAM wParam: the wParam that holds information about the message.
-		 * LPARAM lParam: the lParam that holds information about the message.
-		 *
-		 * return: either 0 or value of DefWindowProc callback. 
-		 *
-		 */
-		virtual LRESULT DisplayProcedure(HWND hWnd, u32 msg, WPARAM wParam, LPARAM lParam);
-	};
+			/*
+			 * @brief This method is responsible for handling the idle state of the
+			 * window object, receiving and sending messages.
+			 *
+			 */
+			virtual void PollEvents();
+
+			/*
+			 * @brief This callback function is responsible for handling the Win32Window
+			 * object's messages. It is called by the MainWndProc Callback and
+			 * effectively handles messages sent by the MessageLoop Method.
+			 *
+			 * @param hWnd: the handle of the window.
+			 * @param msg: the message received.
+			 * @param wParam: the wParam that holds information about the message.
+			 * @param lParam: the lParam that holds information about the message.
+			 *
+			 * @return either 0 or value of DefWindowProc callback.
+			 *
+			 */
+			virtual u64 HandleEvents(HWND hWnd, u32 msg, WPARAM wParam, LPARAM lParam);
+
+		};
+	}
 }
-
-// Externs the pointer to the Main Win32Window object.
-extern Re::Win32Window* pMainWindow;
-
-/* 
- * mainWnd MainWndProc Callback
- *
- * This callback function handles messages sent to the mainWnd.
- * It acts as a middle-man, sending messages to the mainWnd's object
- * personal handler.
- *
- * HWND hWnd: the handle of the window.
- * u32 msg: the message received.
- * WPARAM wParam: the wParam that holds information about the message.
- * LPARAM lParam: the lParam that holds information about the message.
- *
- * return: value of the DisplayProcedure callback. 
- *
- */
-LRESULT CALLBACK MainWndProc(HWND hWnd, u32 msg, WPARAM wParam, LPARAM lParam);

@@ -8,7 +8,11 @@
 #pragma once
 
 #include "Core/Entity.hpp"
+#include "Core/Result.hpp"
 #include "Graphics/Renderer.hpp"
+
+#include "Platform/Win32/Window.hpp"
+#include "Platform/Win32/Timer.hpp"
 
 #include <boost/container/map.hpp>
 #include <boost/container/vector.hpp>
@@ -22,6 +26,12 @@ namespace Re
 {
 	namespace Core
 	{
+		enum class WorldResult
+		{
+			Success = 0,
+			Failure = 1
+		};
+
 		class World
 		{
 		private:
@@ -39,9 +49,10 @@ namespace Re
 		public:
 			World();
 
-			void Startup();
+			WorldResult Startup();
 			void Shutdown();
 			void Render();
+			void Loop();
 
 			template <typename EntityType, typename... EntityArgs>
 			EntityType& AddEntity(EntityArgs&&... args)
@@ -77,6 +88,8 @@ namespace Re
 			boost::condition_variable _shouldDispatch;
 			
 			Graphics::Renderer _renderer;
+			Platform::Win32Window _window;
+			Platform::Win32Timer _timer;
 		};
 	}
 }

@@ -73,31 +73,15 @@ int main()
 	entity.AddComponent<Re::Components::TransformComponent>(12, 7, 5);
 	auto transform = entity.GetComponent<Re::Components::TransformComponent>();
 
-	Re::Platform::Win32Timer timer;
 	World world;
-	world.Startup();
-
 	for (usize i = 0; i < NUM_ENTITIES; ++i)
 	{
 		world.AddEntity<Entity>();
 	}
 
-	auto entities = world.GetEntities<Entity>();
-	
-	timer.Reset();
-	timer.Start();
-	world.Render();
-	while (true)
-	{
-		timer.Tick();
-		if (timer.ElapsedTime() >= 20.0f)
-		{
-			break;
-		}
-	}
-
+	world.Startup();
+	world.Loop();
 	world.Shutdown();
-	timer.Stop();
 
 	// Module Start-up
 	nNewtonManager.StartUp();

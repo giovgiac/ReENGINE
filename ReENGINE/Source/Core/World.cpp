@@ -17,9 +17,11 @@ namespace Re
 			: _dispatchThreadsMutex(NUM_DISPATCH_THREADS)
 		{}
 
-		void World::Startup()
+		WorldResult World::Startup()
 		{
-			_renderer.Startup();
+			CHECK_RESULT(_window.Startup("Test Application", 800, 600, SW_SHOW), Platform::WindowResult::Success, WorldResult::Failure);
+			CHECK_RESULT(_renderer.Startup(_window), Graphics::RendererResult::Success, WorldResult::Failure);
+
 			_dispatchThreadsData.resize(NUM_DISPATCH_THREADS);
 			for (usize i = 0; i < NUM_DISPATCH_THREADS; ++i)
 			{
@@ -31,6 +33,8 @@ namespace Re
 
 				_dispatchThreadsData[i] = std::move(threadData);
 			}
+
+			return WorldResult::Success;
 		}
 
 		void World::Shutdown()
@@ -39,6 +43,7 @@ namespace Re
 			_dispatchThreadsData.clear();
 			_entities.clear();
 			_renderer.Shutdown();
+			_window.Shutdown();
 		}
 
 		void World::Render()
@@ -52,6 +57,18 @@ namespace Re
 			}
 
 			_shouldDispatch.notify_all();
+		}
+
+		void World::Loop()
+		{
+			_timer.Reset();
+			_timer.Start();
+			while (!_window.GetShouldClose())
+			{
+				_window.PollEvents();
+				Render();
+				_timer.Tick();
+			}
 		}
 
 		void World::DispatchToRenderer(usize threadIndex)
@@ -68,7 +85,7 @@ namespace Re
 				}
 				else if (threadData._shouldRender)
 				{
-					// TODO: Corrigir algoritmo, pois só funciona em múltiplo de NUM_DISPATCH_THREADS.
+					// TODO: Fix algorithm, only works on multiples of NUM_DISPATCH_THREADS.
 					auto current = _entities.cbegin();
 					auto end = _entities.cbegin();
 					usize blockSize = (_entities.size() + 1) / NUM_DISPATCH_THREADS;

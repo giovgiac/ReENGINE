@@ -18,7 +18,7 @@ namespace Re
 
 		void Entity::Initialize()
 		{
-			Debug::Log(NTEXT("Entity initialized!\n"));
+			//Debug::Log(NTEXT("Entity initialized!\n"));
 		}
 
 		void Entity::Update(float DeltaTime)

@@ -145,6 +145,7 @@
     <ClInclude Include="Source\Graphics\Renderer.hpp" />
     <ClInclude Include="Source\Core\World.hpp" />
     <ClInclude Include="Source\String\Character.hpp" />
+    <ClInclude Include="Source\Core\Result.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
