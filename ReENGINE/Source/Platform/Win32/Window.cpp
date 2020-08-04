@@ -77,7 +77,7 @@ namespace Re
 			}
 
 			// Create Window
-			_hWnd = CreateWindow(NTEXT("ReENGINE"), title, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+			_hWnd = CreateWindow(NTEXT("ReENGINE"), title, WS_OVERLAPPED | WS_MINIMIZEBOX | WS_SYSMENU, CW_USEDEFAULT, CW_USEDEFAULT,
 								 width, height, 0, 0, _hInstance, 0);
 
 			if (!_hWnd)

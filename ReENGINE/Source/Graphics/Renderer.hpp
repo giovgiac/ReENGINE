@@ -36,6 +36,8 @@ namespace Re
 		class Renderer
 		{
 		private:
+			// Multithreaded-related structures.
+
 			struct RenderThreadData
 			{
 				usize _index;
@@ -44,6 +46,27 @@ namespace Re
 
 				RenderThreadData()
 					: _index(-1), _shouldClose(false) {}
+			};
+
+			// Vulkan-related structures.
+
+			struct QueueFamilyInfo
+			{
+				i32 _graphicsCount = 0;
+				i32 _graphicsFamily = -1;
+				i32 _presentationFamily = -1;
+
+				bool IsValid() const
+				{
+					return _graphicsFamily >= 0 && _presentationFamily >= 0;
+				}
+			};
+
+			struct SwapchainInfo 
+			{
+				VkSurfaceCapabilitiesKHR _capabilities;
+				boost::container::vector<VkSurfaceFormatKHR> _formats;
+				boost::container::vector<VkPresentModeKHR> _modes;
 			};
 
 		public:
@@ -62,7 +85,18 @@ namespace Re
 
 			// Vulkan-related private methods.
 
+			// Get functions.
+			RendererResult RetrievePhysicalDevice();
+
+			// Support functions.
+			bool CheckDeviceExtensionSupport(VkPhysicalDevice device) const;
+			bool CheckPhysicalDeviceSuitable(VkPhysicalDevice device) const;
+			QueueFamilyInfo GetQueueFamilyInfo(VkPhysicalDevice device) const;
+			SwapchainInfo GetSwapchainInfo(VkPhysicalDevice device) const;
+
+			// Create functions.
 			RendererResult CreateInstance();
+			RendererResult CreateLogicalDevice();
 
 			#if PLATFORM_WINDOWS
 			RendererResult CreateWindowsSurface(const Platform::Win32Window& window);
@@ -83,6 +117,12 @@ namespace Re
 			// Vulkan-related members.
 			VkInstance _instance;
 			VkSurfaceKHR _surface;
+			struct {
+				VkPhysicalDevice _physical;
+				VkDevice _logical;
+			} _device;
+			boost::container::vector<VkQueue> _graphicsQueues;
+			VkQueue _presentationQueue;
 
 			#if _DEBUG
 			VkDebugUtilsMessengerEXT _debugMessenger;

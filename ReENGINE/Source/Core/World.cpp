@@ -63,11 +63,12 @@ namespace Re
 		{
 			_timer.Reset();
 			_timer.Start();
+			Render();
 			while (!_window.GetShouldClose())
 			{
 				_window.PollEvents();
-				Render();
 				_timer.Tick();
+				// TODO: Call Renderer Present
 			}
 		}
 
