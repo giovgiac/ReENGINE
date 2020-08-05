@@ -52,7 +52,6 @@ namespace Re
 
 			struct QueueFamilyInfo
 			{
-				i32 _graphicsCount = 0;
 				i32 _graphicsFamily = -1;
 				i32 _presentationFamily = -1;
 
@@ -79,8 +78,9 @@ namespace Re
 			Renderer();
 
 			void AddToQueue(boost::shared_ptr<Core::Entity> newEntity);
-
+			
 			RendererResult Startup(const Platform::Win32Window& window);
+			RendererResult Render();
 			void Shutdown();
 
 		private:
@@ -115,9 +115,18 @@ namespace Re
 			RendererResult CreateSwapchain();
 			RendererResult CreateRenderPass();
 			RendererResult CreateGraphicsPipeline();
+			RendererResult CreateFramebuffers();
+			RendererResult CreateCommandPools();
+			RendererResult CreateCommandBuffers();
+			RendererResult CreateSynchronization();
+
+			// Record Functions.
+			RendererResult RecordCommands();
 
 			// Destroy functions.
 			void DestroySwapchain();
+			void DestroyFramebuffers();
+			void DestroySynchronization();
 
 			#if PLATFORM_WINDOWS
 			RendererResult CreateWindowsSurface(const Platform::Win32Window& window);
@@ -142,23 +151,32 @@ namespace Re
 				VkPhysicalDevice _physical;
 				VkDevice _logical;
 			} _device;
-			boost::container::vector<VkQueue> _graphicsQueues;
+			VkQueue _graphicsQueue;
 			VkQueue _presentationQueue;
 			VkSwapchainKHR _swapchain;
 			boost::container::vector<SwapchainImage> _swapchainImages;
+			boost::container::vector<VkFramebuffer> _swapchainFramebuffers;
+			boost::container::vector<VkCommandBuffer> _commandBuffers;
+			i32 _currentFrame;
 
 			// Pipeline-related members.
 			VkPipeline _graphicsPipeline;
 			VkPipelineLayout _pipelineLayout;
 			VkRenderPass _renderPass;
-
-			#if _DEBUG
-			VkDebugUtilsMessengerEXT _debugMessenger;
-			#endif
+			VkCommandPool _graphicsPool;
 
 			// Vulkan configuration members.
 			VkFormat _swapchainFormat;
 			VkExtent2D _swapchainExtent;
+
+			// Vulkan synchronization members.
+			boost::container::vector<VkSemaphore> _imageAvailable;
+			boost::container::vector<VkSemaphore> _renderFinished;
+			boost::container::vector<VkFence> _drawFences;
+
+			#if _DEBUG
+			VkDebugUtilsMessengerEXT _debugMessenger;
+			#endif
 
 			const Platform::Win32Window* _window;
 

@@ -12,6 +12,8 @@
 
 #define NUM_RENDER_THREADS 16
 
+const i32 MAX_FRAME_DRAWS = 2;
+
 static const boost::container::vector<const utf8*> instanceExtensions = {
 	VK_KHR_SURFACE_EXTENSION_NAME,
 
@@ -73,13 +75,56 @@ namespace Re
 	namespace Graphics
 	{
 		Renderer::Renderer()
-			: _drawingQueue(512), _drawingThreadsMutex(NUM_RENDER_THREADS)
+			: _currentFrame(0), _drawingQueue(512), _drawingThreadsMutex(NUM_RENDER_THREADS)
 		{}
 
 		void Renderer::AddToQueue(boost::shared_ptr<Core::Entity> newEntity)
 		{
 			_drawingQueue.push(newEntity.get());
 			_drawingAvailable.notify_one();
+		}
+
+		RendererResult Renderer::Render()
+		{
+			// Enforce maximum number of drawable frames with fences.
+			vkWaitForFences(_device._logical, 1, &_drawFences[_currentFrame], VK_TRUE, -1);
+			vkResetFences(_device._logical, 1, &_drawFences[_currentFrame]);
+
+			// Get next image to render to (and signal when succeeded).
+			u32 imageIndex;
+			CHECK_RESULT(vkAcquireNextImageKHR(_device._logical, _swapchain, -1, _imageAvailable[_currentFrame], VK_NULL_HANDLE, &imageIndex), VK_SUCCESS, RendererResult::Failure);
+
+			// Define stages that we need to wait for semaphores.
+			VkPipelineStageFlags waitStages[] = {
+				VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+			};
+
+			// Submit appropriate command buffer to acquired image.
+			VkSubmitInfo submitInfo = {};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.waitSemaphoreCount = 1;
+			submitInfo.pWaitSemaphores = &_imageAvailable[_currentFrame];
+			submitInfo.pWaitDstStageMask = waitStages;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &_commandBuffers[imageIndex];
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = &_renderFinished[_currentFrame];
+
+			CHECK_RESULT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _drawFences[_currentFrame]), VK_SUCCESS, RendererResult::Failure);
+
+			// Present rendered image to screen.
+			VkPresentInfoKHR presentInfo = {};
+			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = &_renderFinished[_currentFrame];
+			presentInfo.swapchainCount = 1;
+			presentInfo.pSwapchains = &_swapchain;
+			presentInfo.pImageIndices = &imageIndex;
+			
+			CHECK_RESULT(vkQueuePresentKHR(_presentationQueue, &presentInfo), VK_SUCCESS, RendererResult::Failure);
+
+			_currentFrame = (_currentFrame + 1) % MAX_FRAME_DRAWS;
+			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::Startup(const Platform::Win32Window& window)
@@ -100,6 +145,11 @@ namespace Re
 			CHECK_RESULT_WITH_ERROR(CreateSwapchain(), RendererResult::Success, NTEXT("Failed to create swapchain!\n"), RendererResult::Failure);
 			CHECK_RESULT_WITH_ERROR(CreateRenderPass(), RendererResult::Success, NTEXT("Failed to create renderpass!\n"), RendererResult::Failure);
 			CHECK_RESULT_WITH_ERROR(CreateGraphicsPipeline(), RendererResult::Success, NTEXT("Failed to create graphics pipeline!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(CreateFramebuffers(), RendererResult::Success, NTEXT("Failed to create framebuffers!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(CreateCommandPools(), RendererResult::Success, NTEXT("Failed to create command pools!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(CreateCommandBuffers(), RendererResult::Success, NTEXT("Failed to create command buffers!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(RecordCommands(), RendererResult::Success, NTEXT("Failed to record commands!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(CreateSynchronization(), RendererResult::Success, NTEXT("Failed to create synchronization!\n"), RendererResult::Failure);
 
 			// Multithreading startup
 			_drawingThreadsData.resize(NUM_RENDER_THREADS);
@@ -123,6 +173,11 @@ namespace Re
 			_drawingThreadsData.clear();
 
 			// Vulkan shutdown
+			vkDeviceWaitIdle(_device._logical);
+
+			DestroySynchronization();
+			vkDestroyCommandPool(_device._logical, _graphicsPool, nullptr);
+			DestroyFramebuffers();
 			vkDestroyPipeline(_device._logical, _graphicsPipeline, nullptr);
 			vkDestroyPipelineLayout(_device._logical, _pipelineLayout, nullptr);
 			vkDestroyRenderPass(_device._logical, _renderPass, nullptr);
@@ -262,7 +317,6 @@ namespace Re
 			{
 				if (familyProperties[i].queueCount > 0 && familyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 				{
-					familyInfo._graphicsCount = familyProperties[i].queueCount;
 					familyInfo._graphicsFamily = i;
 				}
 
@@ -439,25 +493,16 @@ namespace Re
 			auto familyInfo = GetQueueFamilyInfo(_device._physical);
 			boost::container::set<i32> queueFamilies = { familyInfo._graphicsFamily, familyInfo._presentationFamily };
 			boost::container::vector<VkDeviceQueueCreateInfo> queueInfos(queueFamilies.size());
-			boost::container::vector<boost::container::vector<float>> queueProrities(queueFamilies.size());
-			boost::container::map<i32, i32> queueCounts;
-
-			// Add queue counts into the map with unique keys.
-			queueCounts.emplace_unique(familyInfo._graphicsFamily, familyInfo._graphicsCount);
-			queueCounts.emplace_unique(familyInfo._presentationFamily, 1);
+			float queuePriorities = 1.0f;
 
 			// Create the information regarding the queues that will be used from the logical device.
 			for (auto& family : queueFamilies)
 			{
-				// Configure queue priorities for specified family.
-				queueProrities[family].resize(queueCounts[family]);
-				queueProrities[family].assign(queueCounts[family], 1.0f);
-
 				// Configure queue info for specified family.
 				queueInfos[family].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 				queueInfos[family].queueFamilyIndex = family;
-				queueInfos[family].queueCount = queueCounts[family];
-				queueInfos[family].pQueuePriorities = queueProrities[family].data();
+				queueInfos[family].queueCount = 1;
+				queueInfos[family].pQueuePriorities = &queuePriorities;
 			}
 
 			// Construct the features from the device that we are going to use.
@@ -475,13 +520,9 @@ namespace Re
 			CHECK_RESULT(vkCreateDevice(_device._physical, &createInfo, nullptr, &_device._logical), VK_SUCCESS, RendererResult::Failure);
 
 			// Retrieve the queues created by the logical device and store handles.
-			_graphicsQueues.resize(familyInfo._graphicsCount);
-			for (usize i = 0; i < familyInfo._graphicsCount; ++i)
-			{
-				vkGetDeviceQueue(_device._logical, familyInfo._graphicsFamily, i, &_graphicsQueues[i]);
-			}
-
+			vkGetDeviceQueue(_device._logical, familyInfo._graphicsFamily, 0, &_graphicsQueue);
 			vkGetDeviceQueue(_device._logical, familyInfo._presentationFamily, 0, &_presentationQueue);
+
 			return RendererResult::Success;
 		}
 
@@ -793,6 +834,118 @@ namespace Re
 			return RendererResult::Success;
 		}
 
+		RendererResult Renderer::CreateFramebuffers()
+		{
+			_swapchainFramebuffers.resize(_swapchainImages.size());
+			for (usize i = 0; i < _swapchainFramebuffers.size(); ++i)
+			{
+				boost::array<VkImageView, 1> attachments = {
+					_swapchainImages[i]._view,
+				};
+
+				VkFramebufferCreateInfo createInfo = {};
+				createInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+				createInfo.renderPass = _renderPass;
+				createInfo.attachmentCount = static_cast<u32>(attachments.size());
+				createInfo.pAttachments = attachments.data();
+				createInfo.width = _swapchainExtent.width;
+				createInfo.height = _swapchainExtent.height;
+				createInfo.layers = 1;
+
+				CHECK_RESULT(vkCreateFramebuffer(_device._logical, &createInfo, nullptr, &_swapchainFramebuffers[i]), VK_SUCCESS, RendererResult::Failure);
+			}
+
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateCommandPools()
+		{
+			QueueFamilyInfo familyInfo = GetQueueFamilyInfo(_device._physical);
+			VkCommandPoolCreateInfo createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			createInfo.queueFamilyIndex = familyInfo._graphicsFamily;
+
+			CHECK_RESULT(vkCreateCommandPool(_device._logical, &createInfo, nullptr, &_graphicsPool), VK_SUCCESS, RendererResult::Failure);
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateCommandBuffers()
+		{
+			_commandBuffers.resize(_swapchainFramebuffers.size());
+			
+			VkCommandBufferAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocateInfo.commandPool = _graphicsPool;
+			allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocateInfo.commandBufferCount = static_cast<u32>(_commandBuffers.size());
+			
+			CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, _commandBuffers.data()), VK_SUCCESS, RendererResult::Failure);
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateSynchronization()
+		{
+			_imageAvailable.resize(MAX_FRAME_DRAWS);
+			_renderFinished.resize(MAX_FRAME_DRAWS);
+			_drawFences.resize(MAX_FRAME_DRAWS);
+
+			// Semaphore creation information.
+			VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+			semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+			// Fence creation information.
+			VkFenceCreateInfo fenceCreateInfo = {};
+			fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+			for (usize i = 0; i < MAX_FRAME_DRAWS; ++i)
+			{
+				CHECK_RESULT(vkCreateSemaphore(_device._logical, &semaphoreCreateInfo, nullptr, &_imageAvailable[i]), VK_SUCCESS, RendererResult::Failure);
+				CHECK_RESULT(vkCreateSemaphore(_device._logical, &semaphoreCreateInfo, nullptr, &_renderFinished[i]), VK_SUCCESS, RendererResult::Failure);
+				CHECK_RESULT(vkCreateFence(_device._logical, &fenceCreateInfo, nullptr, &_drawFences[i]), VK_SUCCESS, RendererResult::Failure);
+			}
+
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::RecordCommands()
+		{
+			// Information about how to begin a command buffer.
+			VkCommandBufferBeginInfo bufferBeginInfo = {};
+			bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+			// Define the values to clear the framebuffer attachments with.
+			VkClearValue clearValues[] = {
+				{ 0.6f, 0.65f, 0.4f, 1.0f }
+			};
+
+			// Information about to begin a render pass.
+			VkRenderPassBeginInfo passBeginInfo = {};
+			passBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+			passBeginInfo.renderPass = _renderPass;
+			passBeginInfo.renderArea.offset = { 0, 0 };
+			passBeginInfo.renderArea.extent = _swapchainExtent;
+			passBeginInfo.clearValueCount = 1;
+			passBeginInfo.pClearValues = clearValues;
+
+			for (usize i = 0; i < _commandBuffers.size(); ++i)
+			{
+				// Set the correct framebuffer for the render pass.
+				passBeginInfo.framebuffer = _swapchainFramebuffers[i];
+
+				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure);
+				vkCmdBeginRenderPass(_commandBuffers[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+					
+					vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+					vkCmdDraw(_commandBuffers[i], 3, 1, 0, 0);
+
+				vkCmdEndRenderPass(_commandBuffers[i]);
+				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[i]), VK_SUCCESS, RendererResult::Failure);
+			}
+
+			return RendererResult::Success;
+		}
+		
 		void Renderer::DestroySwapchain()
 		{
 			// Destroy each of the created swapchain views.
@@ -802,6 +955,25 @@ namespace Re
 			}
 
 			vkDestroySwapchainKHR(_device._logical, _swapchain, nullptr);
+		}
+
+		void Renderer::DestroyFramebuffers()
+		{
+			// Destroy each of the created framebuffers.
+			for (auto& frame : _swapchainFramebuffers)
+			{
+				vkDestroyFramebuffer(_device._logical, frame, nullptr);
+			}
+		}
+
+		void Renderer::DestroySynchronization()
+		{
+			for (usize i = 0; i < MAX_FRAME_DRAWS; ++i)
+			{
+				vkDestroySemaphore(_device._logical, _renderFinished[i], nullptr);
+				vkDestroySemaphore(_device._logical, _imageAvailable[i], nullptr);
+				vkDestroyFence(_device._logical, _drawFences[i], nullptr);
+			}
 		}
 
 		#if PLATFORM_WINDOWS

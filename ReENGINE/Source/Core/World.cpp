@@ -68,7 +68,7 @@ namespace Re
 			{
 				_window.PollEvents();
 				_timer.Tick();
-				// TODO: Call Renderer Present
+				_renderer.Render();
 			}
 		}
 
