@@ -113,6 +113,7 @@ namespace Re
 			RendererResult CreateInstance();
 			RendererResult CreateLogicalDevice();
 			RendererResult CreateSwapchain();
+			RendererResult CreateRenderPass();
 			RendererResult CreateGraphicsPipeline();
 
 			// Destroy functions.
@@ -145,6 +146,11 @@ namespace Re
 			VkQueue _presentationQueue;
 			VkSwapchainKHR _swapchain;
 			boost::container::vector<SwapchainImage> _swapchainImages;
+
+			// Pipeline-related members.
+			VkPipeline _graphicsPipeline;
+			VkPipelineLayout _pipelineLayout;
+			VkRenderPass _renderPass;
 
 			#if _DEBUG
 			VkDebugUtilsMessengerEXT _debugMessenger;
