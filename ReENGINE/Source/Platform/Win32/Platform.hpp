@@ -15,6 +15,11 @@
 #include <typeinfo>
 #include <Windows.h>
 
+/* Get rid of Windows useless macros. */
+
+#undef min
+#undef max
+
 /* Windows Specific Settings */
 
 #define ALIGNOF(x) alignof(x)

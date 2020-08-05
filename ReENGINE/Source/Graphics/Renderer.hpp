@@ -69,6 +69,12 @@ namespace Re
 				boost::container::vector<VkPresentModeKHR> _modes;
 			};
 
+			struct SwapchainImage
+			{
+				VkImage _raw;
+				VkImageView _view;
+			};
+
 		public:
 			Renderer();
 
@@ -94,9 +100,23 @@ namespace Re
 			QueueFamilyInfo GetQueueFamilyInfo(VkPhysicalDevice device) const;
 			SwapchainInfo GetSwapchainInfo(VkPhysicalDevice device) const;
 
+			// Support create functions.
+			RendererResult CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags flags, VkImageView* outView) const;
+			RendererResult CreateShaderModule(const boost::container::vector<char>& raw, VkShaderModule* outModule) const;
+
+			// Choose functions.
+			VkSurfaceFormatKHR ChooseBestSurfaceFormat(const boost::container::vector<VkSurfaceFormatKHR>& formats) const;
+			VkPresentModeKHR ChooseBestPresentationMode(const boost::container::vector<VkPresentModeKHR>& modes) const;
+			VkExtent2D ChooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities) const;
+
 			// Create functions.
 			RendererResult CreateInstance();
 			RendererResult CreateLogicalDevice();
+			RendererResult CreateSwapchain();
+			RendererResult CreateGraphicsPipeline();
+
+			// Destroy functions.
+			void DestroySwapchain();
 
 			#if PLATFORM_WINDOWS
 			RendererResult CreateWindowsSurface(const Platform::Win32Window& window);
@@ -123,10 +143,18 @@ namespace Re
 			} _device;
 			boost::container::vector<VkQueue> _graphicsQueues;
 			VkQueue _presentationQueue;
+			VkSwapchainKHR _swapchain;
+			boost::container::vector<SwapchainImage> _swapchainImages;
 
 			#if _DEBUG
 			VkDebugUtilsMessengerEXT _debugMessenger;
 			#endif
+
+			// Vulkan configuration members.
+			VkFormat _swapchainFormat;
+			VkExtent2D _swapchainExtent;
+
+			const Platform::Win32Window* _window;
 
 		};
 	}
