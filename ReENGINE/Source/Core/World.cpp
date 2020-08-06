@@ -7,14 +7,12 @@
 
 #include "World.hpp"
 
-#define NUM_DISPATCH_THREADS 8
-
 namespace Re
 {
 	namespace Core
 	{
 		World::World()
-			: _dispatchThreadsMutex(NUM_DISPATCH_THREADS)
+			: _dispatchQueue(128), _dispatchThreadShouldClose(false) //_dispatchThreadsMutex(NUM_DISPATCH_THREADS)
 		{}
 
 		WorldResult World::Startup()
@@ -22,17 +20,21 @@ namespace Re
 			CHECK_RESULT(_window.Startup("Test Application", 800, 600, SW_SHOW), Platform::WindowResult::Success, WorldResult::Failure);
 			CHECK_RESULT(_renderer.Startup(_window), Graphics::RendererResult::Success, WorldResult::Failure);
 
+			// Initialize dispatching thread.
+			_dispatchThreadShouldClose = false;
+			_dispatchThread = boost::thread(boost::bind(&World::DispatchToRenderer, this));
+			/*
 			_dispatchThreadsData.resize(NUM_DISPATCH_THREADS);
 			for (usize i = 0; i < NUM_DISPATCH_THREADS; ++i)
 			{
 				DispatchThreadData threadData = {};
 				threadData._index = i;
 				threadData._shouldClose = false;
-				threadData._shouldRender = false;
 				threadData._handle = boost::thread(boost::bind(&World::DispatchToRenderer, this, i));
 
 				_dispatchThreadsData[i] = std::move(threadData);
 			}
+			*/
 
 			return WorldResult::Success;
 		}
@@ -40,30 +42,15 @@ namespace Re
 		void World::Shutdown()
 		{
 			JoinDispatchThreads();
-			_dispatchThreadsData.clear();
 			_entities.clear();
 			_renderer.Shutdown();
 			_window.Shutdown();
-		}
-
-		void World::Render()
-		{
-			for (auto& threadData : _dispatchThreadsData)
-			{
-				if (threadData._shouldRender == false)
-				{
-					threadData._shouldRender = true;
-				}
-			}
-
-			_shouldDispatch.notify_all();
 		}
 
 		void World::Loop()
 		{
 			_timer.Reset();
 			_timer.Start();
-			Render();
 			while (!_window.GetShouldClose())
 			{
 				_window.PollEvents();
@@ -72,8 +59,29 @@ namespace Re
 			}
 		}
 
-		void World::DispatchToRenderer(usize threadIndex)
+		void World::DispatchToRenderer()
 		{
+			while (true)
+			{
+				Entity* newEntity;
+				boost::unique_lock<boost::mutex> lock(_dispatchThreadMutex);
+				_shouldDispatch.wait(lock, [this] { return _dispatchThreadShouldClose || !_dispatchQueue.empty(); });
+
+				if (_dispatchThreadShouldClose)
+				{
+					return;
+				}
+				else
+				{
+					// Dispatch new entities to the renderer.
+					while (_dispatchQueue.pop(newEntity))
+					{
+						_renderer.AddEntity(newEntity);
+					}
+				}
+			}
+
+			/*
 			DispatchThreadData& threadData = _dispatchThreadsData[threadIndex];
 			while (true)
 			{
@@ -105,22 +113,26 @@ namespace Re
 					threadData._shouldRender = false;
 				}
 			}
+			*/
 		}
 
 		void World::JoinDispatchThreads()
 		{
-			// Set up threads so that they may close.
-			std::for_each(_dispatchThreadsData.begin(), _dispatchThreadsData.end(), [](DispatchThreadData& threadData) { 
-				threadData._shouldClose = true; 
-			});
+			// Set up thread so that it may close.
+			_dispatchThreadShouldClose = true;
+			//std::for_each(_dispatchThreadsData.begin(), _dispatchThreadsData.end(), [](DispatchThreadData& threadData) { 
+			//	threadData._shouldClose = true; 
+			//});
 
 			// Notify all threads so that they may wake up and close.
 			_shouldDispatch.notify_all();
 
-			// Join all threads one by one.
-			std::for_each(_dispatchThreadsData.begin(), _dispatchThreadsData.end(), [](DispatchThreadData& threadData) {
-				threadData._handle.join(); 
-			});
+			// Join dispatch thread.
+			_dispatchThread.join();
+
+			//std::for_each(_dispatchThreadsData.begin(), _dispatchThreadsData.end(), [](DispatchThreadData& threadData) {
+			//	threadData._handle.join(); 
+			//});
 		}
 	}
 }

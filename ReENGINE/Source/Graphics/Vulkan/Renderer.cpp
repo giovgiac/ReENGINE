@@ -7,10 +7,13 @@
 
 #include "Renderer.hpp"
 
+#ifdef PLATFORM_USE_VULKAN
+
+#include "Components/RenderComponent.hpp"
+#include "Memory/Memory.hpp"
+
 #include <boost/container/set.hpp>
 #include <fstream>
-
-#define NUM_RENDER_THREADS 16
 
 const i32 MAX_FRAME_DRAWS = 2;
 
@@ -75,17 +78,54 @@ namespace Re
 	namespace Graphics
 	{
 		Renderer::Renderer()
-			: _currentFrame(0), _drawingQueue(512), _drawingThreadsMutex(NUM_RENDER_THREADS)
+			: _currentFrame(0)
 		{}
 
-		void Renderer::AddToQueue(boost::shared_ptr<Core::Entity> newEntity)
+		bool Renderer::AddEntity(Core::Entity* newEntity)
 		{
-			_drawingQueue.push(newEntity.get());
-			_drawingAvailable.notify_one();
+			if (newEntity->HasComponent<Components::RenderComponent>())
+			{
+				auto renderComponent = newEntity->GetComponent<Components::RenderComponent>();
+				if (renderComponent)
+				{
+					auto vertices = renderComponent->GetVertices();
+					if (vertices.size() == 0) return false;
+
+					// Create rendering information for renderable entity.
+					RenderInfo info = {};
+
+					// Create required buffers and images for the rendering.
+					CHECK_RESULT(CreateVertexBuffer(vertices, &info._vertexBuffer, &info._vertexMemory), RendererResult::Success, false);
+					info._vertexCount = static_cast<i32>(vertices.size());
+
+					_entitiesToRender.emplace_unique(newEntity, info);
+
+					// Re-record the commands.
+					CHECK_RESULT(RecordCommands(), RendererResult::Success, false);
+					return true;
+				}
+			}
+			
+			return false;
+		}
+
+		bool Renderer::RemoveEntity(Core::Entity* entityToRemove)
+		{
+			auto entity = _entitiesToRender.find(entityToRemove);
+			if (entity != _entitiesToRender.end())
+			{
+				DestroyVertexBuffer(entity->second._vertexBuffer, entity->second._vertexMemory);
+				_entitiesToRender.erase(entity);
+				return true;
+			}
+
+			return false;
 		}
 
 		RendererResult Renderer::Render()
 		{
+			if (_recordingCommands.load()) return RendererResult::Failure;
+
 			// Enforce maximum number of drawable frames with fences.
 			vkWaitForFences(_device._logical, 1, &_drawFences[_currentFrame], VK_TRUE, -1);
 			vkResetFences(_device._logical, 1, &_drawFences[_currentFrame]);
@@ -152,16 +192,18 @@ namespace Re
 			CHECK_RESULT_WITH_ERROR(CreateSynchronization(), RendererResult::Success, NTEXT("Failed to create synchronization!\n"), RendererResult::Failure);
 
 			// Multithreading startup
-			_drawingThreadsData.resize(NUM_RENDER_THREADS);
-			for (usize i = 0; i < NUM_RENDER_THREADS; ++i)
-			{
-				RenderThreadData threadData = {};
-				threadData._index = i;
-				threadData._shouldClose = false;
-				threadData._handle = boost::thread(boost::bind(&Renderer::DrawToQueue, this, i));
+			//_additionThreadShouldClose = false;
+			//_additionThread = boost::thread(boost::bind(&Renderer::))
+			//_drawingThreadsData.resize(NUM_RENDER_THREADS);
+			//for (usize i = 0; i < NUM_RENDER_THREADS; ++i)
+			//{
+			//	RenderThreadData threadData = {};
+			//	threadData._index = i;
+			//	threadData._shouldClose = false;
+			//	threadData._handle = boost::thread(boost::bind(&Renderer::DrawToQueue, this, i));
 
-				_drawingThreadsData[i] = std::move(threadData);
-			}
+			//	_drawingThreadsData[i] = std::move(threadData);
+			//}
 
 			return RendererResult::Success;
 		}
@@ -169,12 +211,12 @@ namespace Re
 		void Renderer::Shutdown()
 		{
 			// Multithreading shutdown
-			JoinRenderThreads();
-			_drawingThreadsData.clear();
+			//JoinRenderThreads();
 
 			// Vulkan shutdown
 			vkDeviceWaitIdle(_device._logical);
 
+			DestroyEntities();
 			DestroySynchronization();
 			vkDestroyCommandPool(_device._logical, _graphicsPool, nullptr);
 			DestroyFramebuffers();
@@ -190,46 +232,46 @@ namespace Re
 			vkDestroyInstance(_instance, nullptr);
 		}
 
-		void Renderer::DrawToQueue(usize threadIndex)
-		{
-			RenderThreadData& threadData = _drawingThreadsData[threadIndex];
+		//void Renderer::DrawToQueue(usize threadIndex)
+		//{
+		//	RenderThreadData& threadData = _drawingThreadsData[threadIndex];
 
-			while (true)
-			{
-				Core::Entity* entity;
+		//	while (true)
+		//	{
+		//		Core::Entity* entity;
 
-				// Wait for entities to be available in drawing queue.
-				boost::unique_lock<boost::mutex> lock(_drawingThreadsMutex[threadIndex]);
-				_drawingAvailable.wait(lock, [this, &threadData] { return threadData._shouldClose || !_drawingQueue.empty(); });
+		//		// Wait for entities to be available in drawing queue.
+		//		boost::unique_lock<boost::mutex> lock(_drawingThreadsMutex[threadIndex]);
+		//		_entityAvailable.wait(lock, [this, &threadData] { return threadData._shouldClose || !_receiveQueue.empty(); });
 
-				if (threadData._shouldClose)
-				{
-					return;
-				}
-				else if (_drawingQueue.pop(entity))
-				{
-					// TODO: Generate commands to draw entity.
-					//Core::Debug::Log(NTEXT("Drawing Entity %d\n"), entity->GetId());
-					printf("Drawing Entity %d\n", entity->GetId());
-				}
-			}
-		}
+		//		if (threadData._shouldClose)
+		//		{
+		//			return;
+		//		}
+		//		else if (_receiveQueue.pop(entity))
+		//		{
+		//			// TODO: Generate commands to draw entity.
+		//			//Core::Debug::Log(NTEXT("Drawing Entity %d\n"), entity->GetId());
+		//			printf("Drawing Entity %d\n", entity->GetId());
+		//		}
+		//	}
+		//}
 
-		void Renderer::JoinRenderThreads()
-		{
-			// Set threads up so that they may close.
-			std::for_each(_drawingThreadsData.begin(), _drawingThreadsData.end(), [](RenderThreadData& threadData) {
-				threadData._shouldClose = true;
-			});
+		//void Renderer::JoinRenderThreads()
+		//{
+		//	// Set threads up so that they may close.
+		//	std::for_each(_drawingThreadsData.begin(), _drawingThreadsData.end(), [](RenderThreadData& threadData) {
+		//		threadData._shouldClose = true;
+		//	});
 
-			// Notify all threads so that they may wake up and close.
-			_drawingAvailable.notify_all();
+		//	// Notify all threads so that they may wake up and close.
+		//	_entityAvailable.notify_all();
 
-			// Join all the threads one by one.
-			std::for_each(_drawingThreadsData.begin(), _drawingThreadsData.end(), [](RenderThreadData& threadData) {
-				threadData._handle.join();
-			});
-		}
+		//	// Join all the threads one by one.
+		//	std::for_each(_drawingThreadsData.begin(), _drawingThreadsData.end(), [](RenderThreadData& threadData) {
+		//		threadData._handle.join();
+		//	});
+		//}
 
 		RendererResult Renderer::RetrievePhysicalDevice()
 		{
@@ -304,6 +346,23 @@ namespace Re
 			return queueFamilies.IsValid() && extensionsSupported && swapchainValid;
 		}
 
+		u32 Renderer::FindMemoryTypeIndex(u32 allowedTypes, VkMemoryPropertyFlags flags) const
+		{
+			VkPhysicalDeviceMemoryProperties memoryProperties;
+			vkGetPhysicalDeviceMemoryProperties(_device._physical, &memoryProperties);
+
+			for (u32 i = 0; i < memoryProperties.memoryTypeCount; ++i)
+			{
+				// Find a memory type that is allowed and has the desired property flags.
+				if ((allowedTypes & (1 << i)) && ((memoryProperties.memoryTypes[i].propertyFlags & flags) == flags))
+				{
+					return i;
+				}
+			}
+
+			return -1;
+		}
+
 		Renderer::QueueFamilyInfo Renderer::GetQueueFamilyInfo(VkPhysicalDevice device) const
 		{
 			u32 familyCount = 0;
@@ -364,6 +423,8 @@ namespace Re
 
 		RendererResult Renderer::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags flags, VkImageView* outView) const
 		{
+			if (!outView) return RendererResult::Failure;
+			
 			VkImageViewCreateInfo createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 			createInfo.image = image;
@@ -383,29 +444,63 @@ namespace Re
 			createInfo.subresourceRange.baseArrayLayer = 0;
 			createInfo.subresourceRange.layerCount = 1;
 
-			if (outView)
-			{
-				CHECK_RESULT(vkCreateImageView(_device._logical, &createInfo, nullptr, outView), VK_SUCCESS, RendererResult::Failure);
-				return RendererResult::Success;
-			}
-
-			return RendererResult::Failure;
+			CHECK_RESULT(vkCreateImageView(_device._logical, &createInfo, nullptr, outView), VK_SUCCESS, RendererResult::Failure);
+			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::CreateShaderModule(const boost::container::vector<char>& raw, VkShaderModule* outModule) const
 		{
+			if (!outModule) return RendererResult::Failure;
+			
 			VkShaderModuleCreateInfo createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 			createInfo.codeSize = raw.size();
 			createInfo.pCode = reinterpret_cast<const u32*>(raw.data());
 
-			if (outModule)
-			{
-				CHECK_RESULT(vkCreateShaderModule(_device._logical, &createInfo, nullptr, outModule), VK_SUCCESS, RendererResult::Failure);
-				return RendererResult::Success;
-			}
+			CHECK_RESULT(vkCreateShaderModule(_device._logical, &createInfo, nullptr, outModule), VK_SUCCESS, RendererResult::Failure);
+			return RendererResult::Success;
+		}
 
-			return RendererResult::Failure;
+		RendererResult Renderer::CreateVertexBuffer(boost::container::vector<Vertex>& vertices, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const
+		{
+			if (!outBuffer) return RendererResult::Failure;
+			if (!outMemory) return RendererResult::Failure;
+			
+			VkBufferCreateInfo bufferInfo = {};
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = sizeof(Vertex) * vertices.size();
+			bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			
+			CHECK_RESULT(vkCreateBuffer(_device._logical, &bufferInfo, nullptr, outBuffer), VK_SUCCESS, RendererResult::Failure);
+
+			// Get buffer memory requirements.
+			VkMemoryRequirements memoryRequirements;
+			vkGetBufferMemoryRequirements(_device._logical, *outBuffer, &memoryRequirements);
+
+			// Allocate memory to buffer.
+			VkMemoryAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocateInfo.allocationSize = memoryRequirements.size;
+			allocateInfo.memoryTypeIndex = FindMemoryTypeIndex(memoryRequirements.memoryTypeBits, 
+															   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			
+			CHECK_RESULT(vkAllocateMemory(_device._logical, &allocateInfo, nullptr, outMemory), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkBindBufferMemory(_device._logical, *outBuffer, *outMemory, 0), VK_SUCCESS, RendererResult::Failure);
+
+			// Map memory to vertex buffer.
+			void* data;
+			CHECK_RESULT(vkMapMemory(_device._logical, *outMemory, 0, bufferInfo.size, 0, &data), VK_SUCCESS, RendererResult::Failure);
+			Memory::NMemCpy(data, vertices.data(), (usize)bufferInfo.size);
+			vkUnmapMemory(_device._logical, *outMemory);
+
+			return RendererResult::Success;
+		}
+
+		void Renderer::DestroyVertexBuffer(VkBuffer buffer, VkDeviceMemory memory) const
+		{
+			vkDestroyBuffer(_device._logical, buffer, nullptr);
+			vkFreeMemory(_device._logical, memory, nullptr);
 		}
 
 		VkSurfaceFormatKHR Renderer::ChooseBestSurfaceFormat(const boost::container::vector<VkSurfaceFormatKHR>& formats) const
@@ -694,15 +789,36 @@ namespace Re
 
 			#pragma region Vertex Input Stage
 
+			// Definitions of how data for a single vertex is a whole.
+			VkVertexInputBindingDescription bindingDescription = {};
+			bindingDescription.binding = 0;
+			bindingDescription.stride = sizeof(Vertex);
+			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+			// How the data for an attribute is defined within the vertex.
+			boost::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+
+			// Position attribute.
+			attributeDescriptions[0].binding = 0;
+			attributeDescriptions[0].location = 0;
+			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attributeDescriptions[0].offset = offsetof(Vertex, _position);
+			
+			// Color attribute.
+			attributeDescriptions[1].binding = 0;
+			attributeDescriptions[1].location = 1;
+			attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attributeDescriptions[1].offset = offsetof(Vertex, _color);
+
 			// Vertex input stage.
 			VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
 			vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-			vertexInputCreateInfo.vertexBindingDescriptionCount = 0;
-			vertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
-			vertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
-			vertexInputCreateInfo.pVertexAttributeDescriptions = nullptr;
+			vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+			vertexInputCreateInfo.pVertexBindingDescriptions = &bindingDescription;
+			vertexInputCreateInfo.vertexAttributeDescriptionCount = static_cast<u32>(attributeDescriptions.size());
+			vertexInputCreateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
-			#pragma endregion This stage is responsible for configuring the data that goes into the graphics pipeline.
+			#pragma endregion
 			#pragma region Input Assembly Stage
 
 			// Input assembly stage.
@@ -864,6 +980,7 @@ namespace Re
 			VkCommandPoolCreateInfo createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 			createInfo.queueFamilyIndex = familyInfo._graphicsFamily;
+			createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 			CHECK_RESULT(vkCreateCommandPool(_device._logical, &createInfo, nullptr, &_graphicsPool), VK_SUCCESS, RendererResult::Failure);
 			return RendererResult::Success;
@@ -910,6 +1027,8 @@ namespace Re
 
 		RendererResult Renderer::RecordCommands()
 		{
+			_recordingCommands.store(true);
+
 			// Information about how to begin a command buffer.
 			VkCommandBufferBeginInfo bufferBeginInfo = {};
 			bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -927,25 +1046,58 @@ namespace Re
 			passBeginInfo.renderArea.extent = _swapchainExtent;
 			passBeginInfo.clearValueCount = 1;
 			passBeginInfo.pClearValues = clearValues;
-
+			
+			// Wait until device isn't working.
+			CHECK_RESULT(vkDeviceWaitIdle(_device._logical), VK_SUCCESS, RendererResult::Failure);
 			for (usize i = 0; i < _commandBuffers.size(); ++i)
 			{
+				// Reset the command buffer.
+				CHECK_RESULT(vkResetCommandBuffer(_commandBuffers[i], 0), VK_SUCCESS, RendererResult::Failure);
+
 				// Set the correct framebuffer for the render pass.
 				passBeginInfo.framebuffer = _swapchainFramebuffers[i];
 
 				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure);
 				vkCmdBeginRenderPass(_commandBuffers[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 					
+				if (_entitiesToRender.size() > 0)
+				{
 					vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
-					vkCmdDraw(_commandBuffers[i], 3, 1, 0, 0);
+
+					// Acquire required information from the entities to be rendered.
+					boost::container::vector<VkBuffer> vertexBuffers;
+					boost::container::vector<VkDeviceSize> vertexOffsets;
+					u32 vertexCount = 0;
+					for (const auto& ent : _entitiesToRender)
+					{
+						vertexBuffers.emplace_back(ent.second._vertexBuffer);
+						vertexOffsets.emplace_back(0);
+						vertexCount += ent.second._vertexCount;
+					}
+
+					vkCmdBindVertexBuffers(_commandBuffers[i], 0, 1, vertexBuffers.data(), vertexOffsets.data());
+					vkCmdDraw(_commandBuffers[i], vertexCount, 1, 0, 0);
+				}
 
 				vkCmdEndRenderPass(_commandBuffers[i]);
 				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[i]), VK_SUCCESS, RendererResult::Failure);
 			}
 
+			_recordingCommands.store(false);
 			return RendererResult::Success;
 		}
 		
+		void Renderer::DestroyEntities()
+		{
+			// Destroy each of the existing rendarable entities.
+			for (auto& ent : _entitiesToRender)
+			{
+				DestroyVertexBuffer(ent.second._vertexBuffer, ent.second._vertexMemory);
+			}
+			
+			_entitiesToRender.clear();
+		}
+
 		void Renderer::DestroySwapchain()
 		{
 			// Destroy each of the created swapchain views.
@@ -1016,3 +1168,5 @@ namespace Re
 		#endif
 	}
 }
+
+#endif // PLATFORM_USE_VULKAN

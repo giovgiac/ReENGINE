@@ -14,7 +14,17 @@ namespace Re
 	namespace Core
 	{
 		Entity::Entity()
-			: _id(entityId++) {}
+			: _id(entityId++), _owner(nullptr) {}
+
+		Entity::~Entity()
+		{
+			for (auto& comp : _components)
+			{
+				delete comp.second;
+			}
+
+			_components.clear();
+		}
 
 		void Entity::Initialize()
 		{

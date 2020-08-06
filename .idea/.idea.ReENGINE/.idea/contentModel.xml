@@ -7,23 +7,31 @@
       <e p="packages" t="ExcludeRecursive" />
       <e p="ReENGINE" t="IncludeRecursive">
         <e p="Main.cpp" t="Include" />
+        <e p="packages.config" t="Include" />
         <e p="ReENGINE.vcxproj" t="IncludeRecursive" />
+        <e p="Shaders" t="Include">
+          <e p="CompileShaders.bat" t="Include" />
+          <e p="default.frag" t="Include" />
+          <e p="default.vert" t="Include" />
+          <e p="frag.spv" t="Include" />
+          <e p="vert.spv" t="Include" />
+        </e>
         <e p="Source" t="Include">
-          <e p="Collections" t="Include">
-            <e p="Array.hpp" t="Include" />
-            <e p="Char.cpp" t="Include" />
-            <e p="Char.hpp" t="Include" />
-            <e p="List.hpp" t="Include" />
-            <e p="Map.hpp" t="Include" />
-            <e p="String.cpp" t="Include" />
-            <e p="String.hpp" t="Include" />
+          <e p="Components" t="Include">
+            <e p="RenderComponent.cpp" t="Include" />
+            <e p="RenderComponent.hpp" t="Include" />
+            <e p="TransformComponent.cpp" t="Include" />
+            <e p="TransformComponent.hpp" t="Include" />
           </e>
           <e p="Core" t="Include">
+            <e p="Component.hpp" t="Include" />
             <e p="Debug" t="Include">
               <e p="Assert.cpp" t="Include" />
               <e p="Assert.hpp" t="Include" />
               <e p="Debug.hpp" t="Include" />
             </e>
+            <e p="Entity.cpp" t="Include" />
+            <e p="Entity.hpp" t="Include" />
             <e p="GameManager.hpp" t="Include" />
             <e p="Hash" t="Include">
               <e p="FNV.cpp" t="Include" />
@@ -32,7 +40,14 @@
             <e p="Manager.hpp" t="Include" />
             <e p="NewtonManager.cpp" t="Include" />
             <e p="NewtonManager.hpp" t="Include" />
-            <e p="Pointer.hpp" t="Include" />
+            <e p="Result.hpp" t="Include" />
+            <e p="World.cpp" t="Include" />
+            <e p="World.hpp" t="Include" />
+          </e>
+          <e p="Graphics" t="Include">
+            <e p="Renderer.cpp" t="Include" />
+            <e p="Renderer.hpp" t="Include" />
+            <e p="Vertex.hpp" t="Include" />
           </e>
           <e p="Localization" t="Include">
             <e p="Language.cpp" t="Include" />
@@ -41,19 +56,20 @@
             <e p="LocalizationManager.hpp" t="Include" />
           </e>
           <e p="Math" t="Include">
-            <e p="Color.h" t="Include" />
+            <e p="Color.hpp" t="Include" />
             <e p="Math.cpp" t="Include" />
-            <e p="Math.h" t="Include" />
+            <e p="Math.hpp" t="Include" />
             <e p="Matrix.cpp" t="Include" />
-            <e p="Matrix.h" t="Include" />
-            <e p="Transform.h" t="Include" />
+            <e p="Matrix.hpp" t="Include" />
+            <e p="Transform.hpp" t="Include" />
             <e p="Vector.cpp" t="Include" />
-            <e p="Vector.h" t="Include" />
+            <e p="Vector.hpp" t="Include" />
             <e p="Vector3.cpp" t="Include" />
-            <e p="Vector3.h" t="Include" />
-            <e p="Vector4.h" t="Include" />
+            <e p="Vector3.hpp" t="Include" />
+            <e p="Vector4.hpp" t="Include" />
           </e>
           <e p="Memory" t="Include">
+            <e p="Allocator.hpp" t="Include" />
             <e p="DefaultAllocator.cpp" t="Include" />
             <e p="DefaultAllocator.hpp" t="Include" />
             <e p="Memory.cpp" t="Include" />
@@ -65,6 +81,7 @@
           </e>
           <e p="Platform" t="Include">
             <e p="HAL.hpp" t="Include" />
+            <e p="Timer.hpp" t="Include" />
             <e p="Win32" t="Include">
               <e p="Platform.hpp" t="Include" />
               <e p="Timer.cpp" t="Include" />
@@ -72,6 +89,11 @@
               <e p="Window.cpp" t="Include" />
               <e p="Window.hpp" t="Include" />
             </e>
+            <e p="Window.hpp" t="Include" />
+          </e>
+          <e p="String" t="Include">
+            <e p="Character.cpp" t="Include" />
+            <e p="Character.hpp" t="Include" />
           </e>
         </e>
         <e p="x64\Debug" t="ExcludeRecursive" />

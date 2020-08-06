@@ -18,6 +18,10 @@
 #define PLATFORM_LINUX 0
 #endif
 
+#ifndef PLATFORM_USE_VULKAN
+#define PLATFORM_USE_VULKAN 1
+#endif
+
 /* Specific Platform Settings */
 #if PLATFORM_WINDOWS
 #include "Win32/Platform.hpp"
@@ -57,10 +61,6 @@
 
 #ifndef VECTORCALL
 #define VECTORCALL
-#endif
-
-#ifndef PLATFORM_USE_VULKAN
-#define PLATFORM_USE_VULKAN 1
 #endif
 
 /* Platform Global Types */

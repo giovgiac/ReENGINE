@@ -42,7 +42,7 @@ namespace Re {
 		 * return: nothing.
 		 *
 		 */
-		extern void MEMCALL NMemCpy(void* destination, const void* source, u32 size);
+		extern void MEMCALL NMemCpy(void* destination, const void* source, usize size);
 
 		/*
 		 * NMemMove Function
@@ -57,7 +57,7 @@ namespace Re {
 		 * return: nothing.
 		 *
 		 */
-		extern void MEMCALL NMemMove(void* destination, void* source, u32 size);
+		extern void MEMCALL NMemMove(void* destination, void* source, usize size);
 
 		/*
 		 * NMemSet Function

@@ -27,6 +27,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Components\RenderComponent.hpp" />
     <ClInclude Include="Source\Components\TransformComponent.hpp" />
     <ClInclude Include="Source\Core\Component.hpp" />
     <ClInclude Include="Source\Core\Entity.hpp" />
@@ -37,6 +38,8 @@
     <ClInclude Include="Source\Core\Result.hpp" />
     <ClInclude Include="Source\Core\World.hpp" />
     <ClInclude Include="Source\Graphics\Renderer.hpp" />
+    <ClInclude Include="Source\Graphics\Vulkan\Renderer.hpp" />
+    <ClInclude Include="Source\Graphics\Vertex.hpp" />
     <ClInclude Include="Source\Localization\LocalizationManager.hpp" />
     <ClInclude Include="Source\Localization\Language.hpp" />
     <ClInclude Include="Source\Core\Manager.hpp" />
@@ -63,12 +66,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Source\Components\RenderComponent.cpp" />
     <ClCompile Include="Source\Components\TransformComponent.cpp" />
     <ClCompile Include="Source\Core\Entity.cpp" />
     <ClCompile Include="Source\Core\Debug\Assert.cpp" />
     <ClCompile Include="Source\Core\Hash\FNV.cpp" />
     <ClCompile Include="Source\Core\World.cpp" />
-    <ClCompile Include="Source\Graphics\Renderer.cpp" />
+    <ClCompile Include="Source\Graphics\Vulkan\Renderer.cpp" />
     <ClCompile Include="Source\Localization\LocalizationManager.cpp" />
     <ClCompile Include="Source\Localization\Language.cpp" />
     <ClCompile Include="Source\Math\Math.cpp" />
@@ -371,6 +375,7 @@
     <Import Project="..\packages\boost_thread-vc142.1.72.0.0\build\boost_thread-vc142.targets" Condition="Exists('..\packages\boost_thread-vc142.1.72.0.0\build\boost_thread-vc142.targets')" />
     <Import Project="..\packages\boost_date_time-vc142.1.72.0.0\build\boost_date_time-vc142.targets" Condition="Exists('..\packages\boost_date_time-vc142.1.72.0.0\build\boost_date_time-vc142.targets')" />
     <Import Project="..\packages\boost_chrono-vc142.1.72.0.0\build\boost_chrono-vc142.targets" Condition="Exists('..\packages\boost_chrono-vc142.1.72.0.0\build\boost_chrono-vc142.targets')" />
+    <Import Project="..\packages\boost_atomic-vc142.1.72.0.0\build\boost_atomic-vc142.targets" Condition="Exists('..\packages\boost_atomic-vc142.1.72.0.0\build\boost_atomic-vc142.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -380,5 +385,6 @@
     <Error Condition="!Exists('..\packages\boost_thread-vc142.1.72.0.0\build\boost_thread-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_thread-vc142.1.72.0.0\build\boost_thread-vc142.targets'))" />
     <Error Condition="!Exists('..\packages\boost_date_time-vc142.1.72.0.0\build\boost_date_time-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_date_time-vc142.1.72.0.0\build\boost_date_time-vc142.targets'))" />
     <Error Condition="!Exists('..\packages\boost_chrono-vc142.1.72.0.0\build\boost_chrono-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_chrono-vc142.1.72.0.0\build\boost_chrono-vc142.targets'))" />
+    <Error Condition="!Exists('..\packages\boost_atomic-vc142.1.72.0.0\build\boost_atomic-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_atomic-vc142.1.72.0.0\build\boost_atomic-vc142.targets'))" />
   </Target>
 </Project>

@@ -82,9 +82,10 @@
     <ClCompile Include="Source\Math\Vector3.cpp" />
     <ClCompile Include="Source\Core\Entity.cpp" />
     <ClCompile Include="Source\Components\TransformComponent.cpp" />
-    <ClCompile Include="Source\Graphics\Renderer.cpp" />
     <ClCompile Include="Source\Core\World.cpp" />
     <ClCompile Include="Source\String\Character.cpp" />
+    <ClCompile Include="Source\Components\RenderComponent.cpp" />
+    <ClCompile Include="Source\Graphics\Vulkan\Renderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Core\NewtonManager.hpp">
@@ -142,10 +143,13 @@
     <ClInclude Include="Source\Math\Vector4.hpp" />
     <ClInclude Include="Source\Core\Component.hpp" />
     <ClInclude Include="Source\Components\TransformComponent.hpp" />
-    <ClInclude Include="Source\Graphics\Renderer.hpp" />
     <ClInclude Include="Source\Core\World.hpp" />
     <ClInclude Include="Source\String\Character.hpp" />
     <ClInclude Include="Source\Core\Result.hpp" />
+    <ClInclude Include="Source\Components\RenderComponent.hpp" />
+    <ClInclude Include="Source\Graphics\Vertex.hpp" />
+    <ClInclude Include="Source\Graphics\Vulkan\Renderer.hpp" />
+    <ClInclude Include="Source\Graphics\Renderer.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

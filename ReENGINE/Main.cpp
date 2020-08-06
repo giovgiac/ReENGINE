@@ -10,6 +10,7 @@
 #include "Localization/Language.hpp"
 
 #include "Core/Entity.hpp"
+#include "Components/RenderComponent.hpp"
 #include "Components/TransformComponent.hpp"
 #include "Memory/StackAllocator.hpp"
 
@@ -58,7 +59,17 @@ public:
 NewtonManager nNewtonManager;
 TestGame nGameManager;
 
-#define NUM_ENTITIES 64
+boost::container::vector<Re::Graphics::Vertex> vertices = {
+	{ +0.4f, -0.4f, +0.0f,		+1.0f, +0.0f, +0.0f },
+	{ +0.4f, +0.4f, +0.0f,		+0.0f, +1.0f, +0.0f },
+	{ -0.4f, +0.4f, +0.0f,		+0.0f, +0.0f, +1.0f },
+
+	{ -0.4f, +0.4f, +0.0f,		+0.0f, +0.0f, +1.0f },
+	{ -0.4f, -0.4f, +0.0f,		+1.0f, +1.0f, +0.0f },
+	{ +0.4f, -0.4f, +0.0f,		+1.0f, +0.0f, +0.0f },
+};
+
+#define NUM_ENTITIES 1
 
 /* TESTING CLASS - TO BE FULLY IMPLEMENTED LATER */
 // WINDOWS MAIN: i32 WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, i32) 
@@ -69,14 +80,12 @@ int main()
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	#endif
 
-	Entity entity;
-	entity.AddComponent<Re::Components::TransformComponent>(12, 7, 5);
-	auto transform = entity.GetComponent<Re::Components::TransformComponent>();
-
 	World world;
+	
 	for (usize i = 0; i < NUM_ENTITIES; ++i)
 	{
-		world.AddEntity<Entity>();
+		auto ent = world.SpawnEntity<Entity>();
+		ent->AddComponent<Re::Components::RenderComponent>(vertices);
 	}
 
 	world.Startup();

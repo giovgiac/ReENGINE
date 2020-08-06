@@ -27,7 +27,7 @@ namespace Re {
 			return res;
 		}
 
-		void MEMCALL NMemCpy(void* destination, const void* source, u32 size) {
+		void MEMCALL NMemCpy(void* destination, const void* source, usize size) {
 			const u8* s = static_cast<const u8*>(source);
 			u8* d = static_cast<u8*>(destination);
 			i32 len;
@@ -64,7 +64,7 @@ namespace Re {
 			*/
 		}
 
-		void MEMCALL NMemMove(void* destination, void* source, u32 size) {
+		void MEMCALL NMemMove(void* destination, void* source, usize size) {
 			// Read Memory as Bytes
 			u8* src = static_cast<u8*>(source);
 			u8* dst = static_cast<u8*>(destination);

@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <tchar.h>
 #include <typeinfo>
+#include <typeindex>
 #include <Windows.h>
 
 /* Get rid of Windows useless macros. */

@@ -1,31 +1,67 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="BranchesTreeState">
+    <expand>
+      <path>
+        <item name="ROOT" type="e8cecc67:BranchNodeDescriptor" />
+        <item name="LOCAL_ROOT" type="e8cecc67:BranchNodeDescriptor" />
+      </path>
+    </expand>
+    <select />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="4dfa4d6e-254c-4028-bfb8-938f7e51646b" name="Default Changelist" comment="" />
+    <list default="true" id="4dfa4d6e-254c-4028-bfb8-938f7e51646b" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/.idea.ReENGINE/.idea/dictionaries/Giovanni_Giacomo.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/.idea.ReENGINE/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ReENGINE/Source/Components/RenderComponent.hpp" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ReENGINE/Source/Graphics/Vertex.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.idea.ReENGINE/.idea/contentModel.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.ReENGINE/.idea/contentModel.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.idea.ReENGINE/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.ReENGINE/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/ReENGINE.vcxproj" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/ReENGINE.vcxproj" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Shaders/default.frag" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Shaders/default.frag" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Shaders/default.vert" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Shaders/default.vert" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Shaders/frag.spv" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Shaders/frag.spv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Shaders/vert.spv" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Shaders/vert.spv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Source/Core/Entity.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Source/Core/Entity.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Source/Core/Entity.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Source/Core/Entity.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Source/Core/World.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Source/Core/World.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Source/Graphics/Renderer.cpp" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Source/Graphics/Renderer.cpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Source/Graphics/Renderer.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Source/Graphics/Renderer.hpp" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ReENGINE/Source/Platform/HAL.hpp" beforeDir="false" afterPath="$PROJECT_DIR$/ReENGINE/Source/Platform/HAL.hpp" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Math/Math.cpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Math/Color.h" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Math/Math.h" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Collections/String.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Graphics/Vertex.hpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Components/RenderComponent.cpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Localization/Language.hpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Collections/Char.hpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Components/RenderComponent.hpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Core/Debug/Assert.hpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Collections/Array.hpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Core/Debug/Assert.cpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/../../../../../Program Files (x86)/Windows Kits/10/Include/10.0.18362.0/ucrt/math.h" root0="SKIP_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Collections/String.hpp" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Collections/Char.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Graphics/Renderer.hpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Graphics/Renderer.cpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Platform/Win32/Timer.hpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Core/Entity.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Components/TransformComponent.hpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Core/Hash/FNV.hpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/../../../../../Program Files (x86)/Windows Kits/10/Include/10.0.18362.0/ucrt/corecrt_math.h" root0="SKIP_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Core/Pointer.hpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Memory/Memory.cpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Platform/HAL.hpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Core/Entity.hpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Math/Vector3.hpp" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/ReENGINE/Main.cpp" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/ReENGINE/Source/Memory/Memory.hpp" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
@@ -37,18 +73,33 @@
         <option value="$PROJECT_DIR$/ReENGINE/Source/Platform/Win32/Timer.hpp" />
         <option value="$PROJECT_DIR$/ReENGINE/Source/Math/Color.h" />
         <option value="$PROJECT_DIR$/ReENGINE/Main.cpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Platform/HAL.hpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Shaders/default.vert" />
+        <option value="$PROJECT_DIR$/ReENGINE/Shaders/default.frag" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Graphics/Vertex.hpp.cpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Graphics/Vertex.hpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Graphics/Renderer.hpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Core/Entity.cpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Core/Entity.hpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Graphics/Renderer.cpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Components/RenderComponent.hpp" />
+        <option value="$PROJECT_DIR$/ReENGINE/Source/Components/RenderComponent.cpp" />
       </list>
     </option>
   </component>
   <component name="ProjectId" id="1fSdAteZSJTt9L9xlanGA2C9NgA" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
   <component name="PropertiesComponent">
+    <property name="ASKED_SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="settings.editor.selected.configurable" value="reference.settingsdialog.IDE.editor.colors.C++" />
   </component>
   <component name="RunManager">
     <configuration name="ReENGINE" type="CppProject" factoryName="C++ Project">
@@ -127,15 +178,58 @@
       <option name="presentableId" value="Default" />
       <updated>1596215290924</updated>
       <workItem from="1596215295457" duration="2037000" />
+      <workItem from="1596654594337" duration="229000" />
+      <workItem from="1596654845592" duration="4945000" />
     </task>
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
-  <component name="UnityProjectConfiguration" hasMinimizedUI="null" />
+  <component name="UnityProjectConfiguration" hasMinimizedUI="false" />
   <component name="UnityUnitTestConfiguration" currentTestLauncher="NUnit" />
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="VcsManagerConfiguration">
     <option name="CLEAR_INITIAL_COMMIT_MESSAGE" value="true" />
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="763" y="461" width="590" height="265" key="#C++" timestamp="1596657282567">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state x="763" y="461" width="590" height="265" key="#C++/0.0.1920.1040@0.0.1920.1040" timestamp="1596657282567" />
+    <state width="1877" height="282" key="GridCell.Tab.0.bottom" timestamp="1596662287180">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state width="1877" height="282" key="GridCell.Tab.0.bottom/0.0.1920.1040@0.0.1920.1040" timestamp="1596662287180" />
+    <state width="1877" height="282" key="GridCell.Tab.0.center" timestamp="1596662287180">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state width="1877" height="282" key="GridCell.Tab.0.center/0.0.1920.1040@0.0.1920.1040" timestamp="1596662287180" />
+    <state width="1877" height="282" key="GridCell.Tab.0.left" timestamp="1596662287180">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state width="1877" height="282" key="GridCell.Tab.0.left/0.0.1920.1040@0.0.1920.1040" timestamp="1596662287180" />
+    <state width="1877" height="282" key="GridCell.Tab.0.right" timestamp="1596662287180">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state width="1877" height="282" key="GridCell.Tab.0.right/0.0.1920.1040@0.0.1920.1040" timestamp="1596662287180" />
+    <state x="579" y="159" key="RiderGenerateDialog" timestamp="1596655000034">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state x="579" y="159" key="RiderGenerateDialog/0.0.1920.1040@0.0.1920.1040" timestamp="1596655000034" />
+    <state x="461" y="165" key="SettingsEditor" timestamp="1596662186848">
+      <screen x="0" y="0" width="1920" height="1040" />
+    </state>
+    <state x="461" y="165" key="SettingsEditor/0.0.1920.1040@0.0.1920.1040" timestamp="1596662186848" />
   </component>
 </project>

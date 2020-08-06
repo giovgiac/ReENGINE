@@ -21,6 +21,9 @@ namespace Re
 			virtual void Initialize() = 0;
 			virtual void Update(f32 DeltaTime) = 0;
 
+		protected:
+			INLINE Entity* GetOwner() const { return _owner; }
+
 		private:
 			Entity* _owner;
 

@@ -18,6 +18,7 @@
 #include <boost/container/vector.hpp>
 #include <boost/function.hpp>
 #include <boost/iterator/transform_iterator.hpp>
+#include <boost/lockfree/queue.hpp>
 #include <boost/smart_ptr.hpp>
 #include <boost/thread.hpp>
 #include <boost/type_traits/is_base_of.hpp>
@@ -34,36 +35,27 @@ namespace Re
 
 		class World
 		{
-		private:
-			struct DispatchThreadData
-			{
-				usize _index;
-				bool _shouldClose;
-				bool _shouldRender;
-				boost::thread _handle;
-
-				DispatchThreadData()
-					: _index(-1), _shouldClose(false), _shouldRender(false) {}
-			};
-
 		public:
 			World();
 
 			WorldResult Startup();
 			void Shutdown();
-			void Render();
 			void Loop();
 
-			template <typename EntityType, typename... EntityArgs>
-			EntityType& AddEntity(EntityArgs&&... args)
-			{
-				static_assert(boost::is_base_of<Entity, EntityType>::value, "EntityType passed for AddEntity does not inherit from Entity.");
+			INLINE const Graphics::Renderer& GetRenderer() const { return _renderer; }
 
-				auto newEntity = boost::make_shared<EntityType>(std::forward<EntityArgs>(args)...);
+			template <typename EntityType, typename... EntityArgs>
+			boost::shared_ptr<EntityType> SpawnEntity(EntityArgs&&... args)
+			{
+				static_assert(boost::is_base_of<Entity, EntityType>::value, "EntityType passed for SpawnEntity does not inherit from Entity.");
+
+				auto newEntity = boost::shared_ptr<EntityType>(new EntityType(std::forward<EntityArgs>(args)...));
 				_entities.emplace(&typeid(EntityType), newEntity);
 				newEntity->_owner = this;
 				newEntity->Initialize();
-				return *newEntity;
+				_dispatchQueue.push(newEntity.get());
+				_shouldDispatch.notify_one();
+				return newEntity;
 			}
 
 			template <typename EntityType>
@@ -78,18 +70,25 @@ namespace Re
 			}
 
 		private:
-			void DispatchToRenderer(usize threadIndex);
+			void DispatchToRenderer();
 			void JoinDispatchThreads();
 
 		private:
-			boost::container::multimap<const std::type_info*, boost::shared_ptr<Entity>> _entities;
-			boost::container::vector<DispatchThreadData> _dispatchThreadsData;
-			boost::container::vector<boost::mutex> _dispatchThreadsMutex;
+			boost::lockfree::queue<Entity*> _dispatchQueue;
+			boost::thread _dispatchThread;
+			boost::mutex _dispatchThreadMutex;
 			boost::condition_variable _shouldDispatch;
+			bool _dispatchThreadShouldClose;
+
+			boost::container::multimap<const std::type_info*, boost::shared_ptr<Entity>> _entities;
+
+			//boost::container::vector<DispatchThreadData> _dispatchThreadsData;
+			//boost::container::vector<boost::mutex> _dispatchThreadsMutex;
 			
 			Graphics::Renderer _renderer;
 			Platform::Win32Window _window;
 			Platform::Win32Timer _timer;
+
 		};
 	}
 }

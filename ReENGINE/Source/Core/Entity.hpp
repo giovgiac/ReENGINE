@@ -8,9 +8,11 @@
 #pragma once
 
 #include "Core/Debug/Assert.hpp"
+#include "Graphics/Vertex.hpp"
 #include "Component.hpp"
 
 #include <boost/container/map.hpp>
+#include <boost/container/vector.hpp>
 #include <boost/smart_ptr.hpp>
 #include <boost/type_traits/is_base_of.hpp>
 
@@ -23,44 +25,43 @@ namespace Re
 			friend class World;
 
 			public:
-				Entity();
+				virtual ~Entity();
 
 				virtual void Initialize();
 				virtual void Update(float DeltaTime);
-
+			
 				INLINE u32 GetId() const { return _id; }
+				INLINE World* GetWorld() const { return _owner; }
 
 				template <typename ComponentType, typename... ComponentArgs>
-				Component& AddComponent(ComponentArgs&&... args)
+				ComponentType* AddComponent(ComponentArgs&&... args)
 				{
 					static_assert(boost::is_base_of<Component, ComponentType>::value, "ComponentType passed for AddComponent does not inherit from Component.");
+					auto newComponent = new ComponentType(std::forward<ComponentArgs>(args)...);
 
-					auto newComponent = boost::make_shared<ComponentType>(std::forward<ComponentArgs>(args)...);
-					_components.emplace_unique(&typeid(ComponentType), newComponent);
+					_components.emplace_unique(typeid(ComponentType), newComponent);
 					newComponent->_owner = this;
 					newComponent->Initialize();
-					return *newComponent;
+					return newComponent;
 				}
 
 				template <typename ComponentType>
 				bool HasComponent() const
 				{
-					return _components.find(&typeid(ComponentType)) != _components.end();
+					return _components.find(typeid(ComponentType)) != _components.end();
 				}
 
 				template <typename ComponentType>
-				boost::weak_ptr<Component> GetComponent()
+				ComponentType* GetComponent()
 				{
-					if (HasComponent<ComponentType>())
-					{
-						return static_cast<boost::weak_ptr<Component>>(_components[&typeid(ComponentType)]);
-					}
-
-					return boost::weak_ptr<Component>();
+					return static_cast<ComponentType*>(_components[typeid(ComponentType)]);
 				}
 
 		private:
-			boost::container::map<const std::type_info*, boost::shared_ptr<Component>> _components;
+			Entity();
+
+		private:
+			boost::container::map<std::type_index, Component*> _components;
 			u32 _id;
 			World* _owner;
 
