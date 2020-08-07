@@ -30,6 +30,9 @@
 
 #include <vulkan/vulkan.h>
 
+const usize COMMAND_BUFFER_SETS = 2;
+const usize MAX_FRAME_DRAWS = 2;
+
 namespace Re
 {
 	namespace Graphics
@@ -43,6 +46,22 @@ namespace Re
 		class Renderer
 		{
 		private:
+
+			// Transfer-related structures.
+
+			struct RenderInfo
+			{
+				VkBuffer _vertexBuffer;
+				VkDeviceMemory _vertexMemory;
+				i32 _vertexCount;
+			};
+
+			struct TransferInfo
+			{
+				Core::Entity* _entity;
+				bool _isRemoval;
+			};
+
 			// Vulkan-related structures.
 
 			struct QueueFamilyInfo
@@ -54,13 +73,6 @@ namespace Re
 				{
 					return _graphicsFamily >= 0 && _presentationFamily >= 0;
 				}
-			};
-
-			struct RenderInfo
-			{
-				VkBuffer _vertexBuffer;
-				VkDeviceMemory _vertexMemory;
-				i32 _vertexCount;
 			};
 
 			struct SwapchainInfo 
@@ -87,9 +99,8 @@ namespace Re
 			void Shutdown();
 
 		private:
-			// Multithreading private methods.
-			//void DrawToQueue();
-			//void JoinRenderThreads();
+			// Transfer thread private methods.
+			void EntityStreaming();
 
 			// Vulkan-related private methods.
 
@@ -147,14 +158,11 @@ namespace Re
 
 		private:
 			// Multithreading members.
-			//boost::lockfree::queue<Core::Entity*> _additionQueue;
-			//boost::thread _additionThread;
-			//boost::mutex _additionMutex;
-			//boost::condition_variable _entityAvailable;
-			//bool _additionThreadShouldClose;
-
-			//boost::container::vector<RenderThreadData> _drawingThreadsData;
-			//boost::container::vector<boost::mutex> _drawingThreadsMutex;
+			boost::lockfree::queue<TransferInfo> _transferQueue;
+			boost::thread _transferThread;
+			boost::mutex _transferMutex;
+			boost::condition_variable _transferRequested;
+			boost::atomic<bool> _transferThreadShouldClose;
 			
 			// Vulkan-related members.
 			VkInstance _instance;
@@ -168,8 +176,9 @@ namespace Re
 			VkSwapchainKHR _swapchain;
 			boost::container::vector<SwapchainImage> _swapchainImages;
 			boost::container::vector<VkFramebuffer> _swapchainFramebuffers;
-			boost::container::vector<VkCommandBuffer> _commandBuffers;
-			i32 _currentFrame;
+			boost::container::vector<VkCommandBuffer> _commandBuffers[COMMAND_BUFFER_SETS];
+			boost::atomic<usize> _currentBuffer;
+			usize _currentFrame;
 
 			// Pipeline-related members.
 			VkPipeline _graphicsPipeline;
@@ -185,7 +194,6 @@ namespace Re
 			boost::container::vector<VkSemaphore> _imageAvailable;
 			boost::container::vector<VkSemaphore> _renderFinished;
 			boost::container::vector<VkFence> _drawFences;
-			boost::atomic<bool> _recordingCommands = true;
 
 			// Entity-related members.
 			boost::container::map<Core::Entity*, RenderInfo> _entitiesToRender;

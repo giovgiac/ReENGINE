@@ -15,8 +15,6 @@
 #include <boost/container/set.hpp>
 #include <fstream>
 
-const i32 MAX_FRAME_DRAWS = 2;
-
 static const boost::container::vector<const utf8*> instanceExtensions = {
 	VK_KHR_SURFACE_EXTENSION_NAME,
 
@@ -78,61 +76,43 @@ namespace Re
 	namespace Graphics
 	{
 		Renderer::Renderer()
-			: _currentFrame(0)
+			: _currentBuffer(0), _currentFrame(0), _transferQueue(128), _transferThreadShouldClose(false)
 		{}
 
 		bool Renderer::AddEntity(Core::Entity* newEntity)
 		{
-			if (newEntity->HasComponent<Components::RenderComponent>())
-			{
-				auto renderComponent = newEntity->GetComponent<Components::RenderComponent>();
-				if (renderComponent)
-				{
-					auto vertices = renderComponent->GetVertices();
-					if (vertices.size() == 0) return false;
+			TransferInfo info = {};
+			info._entity = newEntity;
+			info._isRemoval = false;
 
-					// Create rendering information for renderable entity.
-					RenderInfo info = {};
-
-					// Create required buffers and images for the rendering.
-					CHECK_RESULT(CreateVertexBuffer(vertices, &info._vertexBuffer, &info._vertexMemory), RendererResult::Success, false);
-					info._vertexCount = static_cast<i32>(vertices.size());
-
-					_entitiesToRender.emplace_unique(newEntity, info);
-
-					// Re-record the commands.
-					CHECK_RESULT(RecordCommands(), RendererResult::Success, false);
-					return true;
-				}
-			}
-			
-			return false;
+			bool pushed = _transferQueue.push(info);
+			_transferRequested.notify_one();
+			return pushed;
 		}
 
 		bool Renderer::RemoveEntity(Core::Entity* entityToRemove)
 		{
-			auto entity = _entitiesToRender.find(entityToRemove);
-			if (entity != _entitiesToRender.end())
-			{
-				DestroyVertexBuffer(entity->second._vertexBuffer, entity->second._vertexMemory);
-				_entitiesToRender.erase(entity);
-				return true;
-			}
+			TransferInfo info = {};
+			info._entity = entityToRemove;
+			info._isRemoval = true;
 
-			return false;
+			bool pushed = _transferQueue.push(info);
+			_transferRequested.notify_one();
+			return pushed;
 		}
 
 		RendererResult Renderer::Render()
 		{
-			if (_recordingCommands.load()) return RendererResult::Failure;
-
 			// Enforce maximum number of drawable frames with fences.
-			vkWaitForFences(_device._logical, 1, &_drawFences[_currentFrame], VK_TRUE, -1);
-			vkResetFences(_device._logical, 1, &_drawFences[_currentFrame]);
+			CHECK_RESULT(vkWaitForFences(_device._logical, 1, &_drawFences[_currentFrame], VK_TRUE, -1), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkResetFences(_device._logical, 1, &_drawFences[_currentFrame]), VK_SUCCESS, RendererResult::Failure);
 
 			// Get next image to render to (and signal when succeeded).
 			u32 imageIndex;
 			CHECK_RESULT(vkAcquireNextImageKHR(_device._logical, _swapchain, -1, _imageAvailable[_currentFrame], VK_NULL_HANDLE, &imageIndex), VK_SUCCESS, RendererResult::Failure);
+
+			// Load the value of the current set of command buffers to use.
+			usize current = _currentBuffer.load(boost::memory_order_relaxed);
 
 			// Define stages that we need to wait for semaphores.
 			VkPipelineStageFlags waitStages[] = {
@@ -146,10 +126,10 @@ namespace Re
 			submitInfo.pWaitSemaphores = &_imageAvailable[_currentFrame];
 			submitInfo.pWaitDstStageMask = waitStages;
 			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &_commandBuffers[imageIndex];
+			submitInfo.pCommandBuffers = &_commandBuffers[current][imageIndex];
 			submitInfo.signalSemaphoreCount = 1;
 			submitInfo.pSignalSemaphores = &_renderFinished[_currentFrame];
-
+			
 			CHECK_RESULT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _drawFences[_currentFrame]), VK_SUCCESS, RendererResult::Failure);
 
 			// Present rendered image to screen.
@@ -191,27 +171,19 @@ namespace Re
 			CHECK_RESULT_WITH_ERROR(RecordCommands(), RendererResult::Success, NTEXT("Failed to record commands!\n"), RendererResult::Failure);
 			CHECK_RESULT_WITH_ERROR(CreateSynchronization(), RendererResult::Success, NTEXT("Failed to create synchronization!\n"), RendererResult::Failure);
 
-			// Multithreading startup
-			//_additionThreadShouldClose = false;
-			//_additionThread = boost::thread(boost::bind(&Renderer::))
-			//_drawingThreadsData.resize(NUM_RENDER_THREADS);
-			//for (usize i = 0; i < NUM_RENDER_THREADS; ++i)
-			//{
-			//	RenderThreadData threadData = {};
-			//	threadData._index = i;
-			//	threadData._shouldClose = false;
-			//	threadData._handle = boost::thread(boost::bind(&Renderer::DrawToQueue, this, i));
-
-			//	_drawingThreadsData[i] = std::move(threadData);
-			//}
+			// Transfer thread startup
+			_transferThreadShouldClose.store(false, boost::memory_order_release);
+			_transferThread = boost::thread(boost::bind(&Renderer::EntityStreaming, this));
 
 			return RendererResult::Success;
 		}
 
 		void Renderer::Shutdown()
 		{
-			// Multithreading shutdown
-			//JoinRenderThreads();
+			// Transfer thread shutdown
+			_transferThreadShouldClose.store(true, boost::memory_order_release);
+			_transferRequested.notify_all();
+			_transferThread.join();
 
 			// Vulkan shutdown
 			vkDeviceWaitIdle(_device._logical);
@@ -232,46 +204,64 @@ namespace Re
 			vkDestroyInstance(_instance, nullptr);
 		}
 
-		//void Renderer::DrawToQueue(usize threadIndex)
-		//{
-		//	RenderThreadData& threadData = _drawingThreadsData[threadIndex];
+		void Renderer::EntityStreaming()
+		{
+			while (true)
+			{
+				boost::unique_lock<boost::mutex> lock(_transferMutex);
+				_transferRequested.wait(lock, [this] {
+					return _transferThreadShouldClose.load(boost::memory_order_acquire) || !_transferQueue.empty(); 
+				});
 
-		//	while (true)
-		//	{
-		//		Core::Entity* entity;
+				if (_transferThreadShouldClose.load(boost::memory_order_acquire))
+				{
+					return;
+				}
+				else
+				{
+					// Perform transfer operations that were requested.
+					TransferInfo transferInfo;
+					while (_transferQueue.pop(transferInfo))
+					{
+						if (!transferInfo._isRemoval)
+						{
+							if (transferInfo._entity->HasComponent<Components::RenderComponent>())
+							{
+								auto renderComponent = transferInfo._entity->GetComponent<Components::RenderComponent>();
+								if (renderComponent)
+								{
+									auto vertices = renderComponent->GetVertices();
+									if (vertices.size() == 0) continue;
 
-		//		// Wait for entities to be available in drawing queue.
-		//		boost::unique_lock<boost::mutex> lock(_drawingThreadsMutex[threadIndex]);
-		//		_entityAvailable.wait(lock, [this, &threadData] { return threadData._shouldClose || !_receiveQueue.empty(); });
+									// Create rendering information for renderable entity.
+									RenderInfo renderInfo = {};
+									renderInfo._vertexCount = static_cast<i32>(vertices.size());
 
-		//		if (threadData._shouldClose)
-		//		{
-		//			return;
-		//		}
-		//		else if (_receiveQueue.pop(entity))
-		//		{
-		//			// TODO: Generate commands to draw entity.
-		//			//Core::Debug::Log(NTEXT("Drawing Entity %d\n"), entity->GetId());
-		//			printf("Drawing Entity %d\n", entity->GetId());
-		//		}
-		//	}
-		//}
+									// Create required buffers and images for the rendering.
+									CreateVertexBuffer(vertices, &renderInfo._vertexBuffer, &renderInfo._vertexMemory);
 
-		//void Renderer::JoinRenderThreads()
-		//{
-		//	// Set threads up so that they may close.
-		//	std::for_each(_drawingThreadsData.begin(), _drawingThreadsData.end(), [](RenderThreadData& threadData) {
-		//		threadData._shouldClose = true;
-		//	});
+									_entitiesToRender.emplace_unique(transferInfo._entity, renderInfo);
+								}
+							}
+						}
+						else
+						{
+							auto entity = _entitiesToRender.find(transferInfo._entity);
+							if (entity != _entitiesToRender.end())
+							{
+								// Destroy buffers and images created for the rendering.
+								DestroyVertexBuffer(entity->second._vertexBuffer, entity->second._vertexMemory);
 
-		//	// Notify all threads so that they may wake up and close.
-		//	_entityAvailable.notify_all();
+								_entitiesToRender.erase(entity);
+							}
+						}
+					}
 
-		//	// Join all the threads one by one.
-		//	std::for_each(_drawingThreadsData.begin(), _drawingThreadsData.end(), [](RenderThreadData& threadData) {
-		//		threadData._handle.join();
-		//	});
-		//}
+					// Re-record the commands after performing transfering operations.
+					RecordCommands();
+				}
+			}
+		}
 
 		RendererResult Renderer::RetrievePhysicalDevice()
 		{
@@ -602,7 +592,7 @@ namespace Re
 
 			// Construct the features from the device that we are going to use.
 			VkPhysicalDeviceFeatures features = {};
-
+			
 			// Create the information regarding the logical device. (ignore layers, they are deprecated).
 			VkDeviceCreateInfo createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -611,7 +601,7 @@ namespace Re
 			createInfo.enabledExtensionCount = static_cast<u32>(deviceExtensions.size());
 			createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 			createInfo.pEnabledFeatures = &features;
-
+			
 			CHECK_RESULT(vkCreateDevice(_device._physical, &createInfo, nullptr, &_device._logical), VK_SUCCESS, RendererResult::Failure);
 
 			// Retrieve the queues created by the logical device and store handles.
@@ -988,15 +978,19 @@ namespace Re
 
 		RendererResult Renderer::CreateCommandBuffers()
 		{
-			_commandBuffers.resize(_swapchainFramebuffers.size());
+			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
+			{
+				_commandBuffers[i].resize(_swapchainFramebuffers.size());
+
+				VkCommandBufferAllocateInfo allocateInfo = {};
+				allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+				allocateInfo.commandPool = _graphicsPool;
+				allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+				allocateInfo.commandBufferCount = static_cast<u32>(_commandBuffers[i].size());
+
+				CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, _commandBuffers[i].data()), VK_SUCCESS, RendererResult::Failure);
+			}
 			
-			VkCommandBufferAllocateInfo allocateInfo = {};
-			allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			allocateInfo.commandPool = _graphicsPool;
-			allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocateInfo.commandBufferCount = static_cast<u32>(_commandBuffers.size());
-			
-			CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, _commandBuffers.data()), VK_SUCCESS, RendererResult::Failure);
 			return RendererResult::Success;
 		}
 
@@ -1027,7 +1021,8 @@ namespace Re
 
 		RendererResult Renderer::RecordCommands()
 		{
-			_recordingCommands.store(true);
+			// Load next inactive command buffer.
+			usize inactive = (_currentBuffer.load(boost::memory_order_relaxed) + 1) % COMMAND_BUFFER_SETS;
 
 			// Information about how to begin a command buffer.
 			VkCommandBufferBeginInfo bufferBeginInfo = {};
@@ -1047,22 +1042,22 @@ namespace Re
 			passBeginInfo.clearValueCount = 1;
 			passBeginInfo.pClearValues = clearValues;
 			
-			// Wait until device isn't working.
+			// TODO: Analyze possible better solution for waiting idly.
 			CHECK_RESULT(vkDeviceWaitIdle(_device._logical), VK_SUCCESS, RendererResult::Failure);
-			for (usize i = 0; i < _commandBuffers.size(); ++i)
+			for (usize i = 0; i < _commandBuffers[inactive].size(); ++i)
 			{
 				// Reset the command buffer.
-				CHECK_RESULT(vkResetCommandBuffer(_commandBuffers[i], 0), VK_SUCCESS, RendererResult::Failure);
+				CHECK_RESULT(vkResetCommandBuffer(_commandBuffers[inactive][i], 0), VK_SUCCESS, RendererResult::Failure);
 
 				// Set the correct framebuffer for the render pass.
 				passBeginInfo.framebuffer = _swapchainFramebuffers[i];
 
-				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure);
-				vkCmdBeginRenderPass(_commandBuffers[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-					
+				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[inactive][i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure);
+				vkCmdBeginRenderPass(_commandBuffers[inactive][i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+				
 				if (_entitiesToRender.size() > 0)
 				{
-					vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+					vkCmdBindPipeline(_commandBuffers[inactive][i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
 
 					// Acquire required information from the entities to be rendered.
 					boost::container::vector<VkBuffer> vertexBuffers;
@@ -1075,15 +1070,17 @@ namespace Re
 						vertexCount += ent.second._vertexCount;
 					}
 
-					vkCmdBindVertexBuffers(_commandBuffers[i], 0, 1, vertexBuffers.data(), vertexOffsets.data());
-					vkCmdDraw(_commandBuffers[i], vertexCount, 1, 0, 0);
+					vkCmdBindVertexBuffers(_commandBuffers[inactive][i], 0, 1, vertexBuffers.data(), vertexOffsets.data());
+					vkCmdDraw(_commandBuffers[inactive][i], vertexCount, 1, 0, 0);
 				}
 
-				vkCmdEndRenderPass(_commandBuffers[i]);
-				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[i]), VK_SUCCESS, RendererResult::Failure);
+				vkCmdEndRenderPass(_commandBuffers[inactive][i]);
+				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[inactive][i]), VK_SUCCESS, RendererResult::Failure);
 			}
-
-			_recordingCommands.store(false);
+			
+			// Update current command buffer being rendered to the screen.
+			printf("Recording Commands...\n");
+			_currentBuffer.store(inactive, boost::memory_order_release);
 			return RendererResult::Success;
 		}
 		

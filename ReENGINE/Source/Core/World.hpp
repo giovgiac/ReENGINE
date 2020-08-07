@@ -81,9 +81,6 @@ namespace Re
 			bool _dispatchThreadShouldClose;
 
 			boost::container::multimap<const std::type_info*, boost::shared_ptr<Entity>> _entities;
-
-			//boost::container::vector<DispatchThreadData> _dispatchThreadsData;
-			//boost::container::vector<boost::mutex> _dispatchThreadsMutex;
 			
 			Graphics::Renderer _renderer;
 			Platform::Win32Window _window;
