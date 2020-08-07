@@ -76,7 +76,7 @@ namespace Re
 	namespace Graphics
 	{
 		Renderer::Renderer()
-			: _currentBuffer(0), _currentFrame(0), _transferQueue(128), _transferThreadShouldClose(false)
+			: _currentBuffer(0), _currentFrame(0), _streamingQueue(128), _streamingThreadShouldClose(false)
 		{}
 
 		bool Renderer::AddEntity(Core::Entity* newEntity)
@@ -85,8 +85,8 @@ namespace Re
 			info._entity = newEntity;
 			info._isRemoval = false;
 
-			bool pushed = _transferQueue.push(info);
-			_transferRequested.notify_one();
+			bool pushed = _streamingQueue.push(info);
+			_streamingRequested.notify_one();
 			return pushed;
 		}
 
@@ -96,8 +96,8 @@ namespace Re
 			info._entity = entityToRemove;
 			info._isRemoval = true;
 
-			bool pushed = _transferQueue.push(info);
-			_transferRequested.notify_one();
+			bool pushed = _streamingQueue.push(info);
+			_streamingRequested.notify_one();
 			return pushed;
 		}
 
@@ -112,7 +112,7 @@ namespace Re
 			CHECK_RESULT(vkAcquireNextImageKHR(_device._logical, _swapchain, -1, _imageAvailable[_currentFrame], VK_NULL_HANDLE, &imageIndex), VK_SUCCESS, RendererResult::Failure);
 
 			// Load the value of the current set of command buffers to use.
-			usize current = _currentBuffer.load(boost::memory_order_relaxed);
+			usize current = _currentBuffer.load();
 
 			// Define stages that we need to wait for semaphores.
 			VkPipelineStageFlags waitStages[] = {
@@ -172,8 +172,8 @@ namespace Re
 			CHECK_RESULT_WITH_ERROR(CreateSynchronization(), RendererResult::Success, NTEXT("Failed to create synchronization!\n"), RendererResult::Failure);
 
 			// Transfer thread startup
-			_transferThreadShouldClose.store(false, boost::memory_order_release);
-			_transferThread = boost::thread(boost::bind(&Renderer::EntityStreaming, this));
+			_streamingThreadShouldClose.store(false, boost::memory_order_release);
+			_streamingThread = boost::thread(boost::bind(&Renderer::EntityStreaming, this));
 
 			return RendererResult::Success;
 		}
@@ -181,9 +181,9 @@ namespace Re
 		void Renderer::Shutdown()
 		{
 			// Transfer thread shutdown
-			_transferThreadShouldClose.store(true, boost::memory_order_release);
-			_transferRequested.notify_all();
-			_transferThread.join();
+			_streamingThreadShouldClose.store(true, boost::memory_order_release);
+			_streamingRequested.notify_all();
+			_streamingThread.join();
 
 			// Vulkan shutdown
 			vkDeviceWaitIdle(_device._logical);
@@ -208,12 +208,12 @@ namespace Re
 		{
 			while (true)
 			{
-				boost::unique_lock<boost::mutex> lock(_transferMutex);
-				_transferRequested.wait(lock, [this] {
-					return _transferThreadShouldClose.load(boost::memory_order_acquire) || !_transferQueue.empty(); 
+				boost::unique_lock<boost::mutex> lock(_streamingMutex);
+				_streamingRequested.wait(lock, [this] {
+					return _streamingThreadShouldClose.load(boost::memory_order_acquire) || !_streamingQueue.empty(); 
 				});
 
-				if (_transferThreadShouldClose.load(boost::memory_order_acquire))
+				if (_streamingThreadShouldClose.load(boost::memory_order_acquire))
 				{
 					return;
 				}
@@ -221,7 +221,7 @@ namespace Re
 				{
 					// Perform transfer operations that were requested.
 					TransferInfo transferInfo;
-					while (_transferQueue.pop(transferInfo))
+					while (_streamingQueue.pop(transferInfo))
 					{
 						if (!transferInfo._isRemoval)
 						{
@@ -230,14 +230,17 @@ namespace Re
 								auto renderComponent = transferInfo._entity->GetComponent<Components::RenderComponent>();
 								if (renderComponent)
 								{
+									auto indices = renderComponent->GetIndices();
 									auto vertices = renderComponent->GetVertices();
-									if (vertices.size() == 0) continue;
+									if (indices.size() == 0 || vertices.size() == 0) continue;
 
 									// Create rendering information for renderable entity.
 									RenderInfo renderInfo = {};
+									renderInfo._indexCount = static_cast<i32>(indices.size());
 									renderInfo._vertexCount = static_cast<i32>(vertices.size());
 
 									// Create required buffers and images for the rendering.
+									CreateIndexBuffer(indices, &renderInfo._indexBuffer, &renderInfo._indexMemory);
 									CreateVertexBuffer(vertices, &renderInfo._vertexBuffer, &renderInfo._vertexMemory);
 
 									_entitiesToRender.emplace_unique(transferInfo._entity, renderInfo);
@@ -250,7 +253,8 @@ namespace Re
 							if (entity != _entitiesToRender.end())
 							{
 								// Destroy buffers and images created for the rendering.
-								DestroyVertexBuffer(entity->second._vertexBuffer, entity->second._vertexMemory);
+								DestroyBuffer(entity->second._indexBuffer, entity->second._indexMemory);
+								DestroyBuffer(entity->second._vertexBuffer, entity->second._vertexMemory);
 
 								_entitiesToRender.erase(entity);
 							}
@@ -411,6 +415,35 @@ namespace Re
 			return info;
 		}
 
+		RendererResult Renderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const
+		{
+			if (!outBuffer) return RendererResult::Failure;
+			if (!outMemory) return RendererResult::Failure;
+
+			VkBufferCreateInfo bufferInfo = {};
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = size;
+			bufferInfo.usage = usage;
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			CHECK_RESULT(vkCreateBuffer(_device._logical, &bufferInfo, nullptr, outBuffer), VK_SUCCESS, RendererResult::Failure);
+
+			// Get buffer memory requirements.
+			VkMemoryRequirements memoryRequirements;
+			vkGetBufferMemoryRequirements(_device._logical, *outBuffer, &memoryRequirements);
+
+			// Allocate memory to buffer.
+			VkMemoryAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocateInfo.allocationSize = memoryRequirements.size;
+			allocateInfo.memoryTypeIndex = FindMemoryTypeIndex(memoryRequirements.memoryTypeBits, properties);
+
+			CHECK_RESULT(vkAllocateMemory(_device._logical, &allocateInfo, nullptr, outMemory), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkBindBufferMemory(_device._logical, *outBuffer, *outMemory, 0), VK_SUCCESS, RendererResult::Failure);
+
+			return RendererResult::Success;
+		}
+
 		RendererResult Renderer::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags flags, VkImageView* outView) const
 		{
 			if (!outView) return RendererResult::Failure;
@@ -451,46 +484,112 @@ namespace Re
 			return RendererResult::Success;
 		}
 
-		RendererResult Renderer::CreateVertexBuffer(boost::container::vector<Vertex>& vertices, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const
+		RendererResult Renderer::CreateIndexBuffer(boost::container::vector<u32>& indices, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const
 		{
-			if (!outBuffer) return RendererResult::Failure;
-			if (!outMemory) return RendererResult::Failure;
-			
-			VkBufferCreateInfo bufferInfo = {};
-			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = sizeof(Vertex) * vertices.size();
-			bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-			
-			CHECK_RESULT(vkCreateBuffer(_device._logical, &bufferInfo, nullptr, outBuffer), VK_SUCCESS, RendererResult::Failure);
+			VkDeviceSize size = sizeof(u32) * indices.size();
 
-			// Get buffer memory requirements.
-			VkMemoryRequirements memoryRequirements;
-			vkGetBufferMemoryRequirements(_device._logical, *outBuffer, &memoryRequirements);
+			// Create a temporary buffer to "stage" index data before GPU transfer.
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingMemory;
+			CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+									  &stagingBuffer, &stagingMemory), RendererResult::Success, RendererResult::Failure);
 
-			// Allocate memory to buffer.
-			VkMemoryAllocateInfo allocateInfo = {};
-			allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			allocateInfo.allocationSize = memoryRequirements.size;
-			allocateInfo.memoryTypeIndex = FindMemoryTypeIndex(memoryRequirements.memoryTypeBits, 
-															   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-			
-			CHECK_RESULT(vkAllocateMemory(_device._logical, &allocateInfo, nullptr, outMemory), VK_SUCCESS, RendererResult::Failure);
-			CHECK_RESULT(vkBindBufferMemory(_device._logical, *outBuffer, *outMemory, 0), VK_SUCCESS, RendererResult::Failure);
-
-			// Map memory to vertex buffer.
+			// Map pointer to staging buffer location and transfer data.
 			void* data;
-			CHECK_RESULT(vkMapMemory(_device._logical, *outMemory, 0, bufferInfo.size, 0, &data), VK_SUCCESS, RendererResult::Failure);
-			Memory::NMemCpy(data, vertices.data(), (usize)bufferInfo.size);
-			vkUnmapMemory(_device._logical, *outMemory);
+			CHECK_RESULT(vkMapMemory(_device._logical, stagingMemory, 0, size, 0, &data), VK_SUCCESS, RendererResult::Failure);
+			Memory::NMemCpy(data, indices.data(), (usize)size);
+			vkUnmapMemory(_device._logical, stagingMemory);
+
+			// Create the actual index buffer located in the GPU and copy data over to it.
+			CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+									  outBuffer, outMemory), RendererResult::Success, RendererResult::Failure);
+			CHECK_RESULT(CopyBuffer(stagingBuffer, *outBuffer, size), RendererResult::Success, RendererResult::Failure);
+
+			// Cleanup temporary staging buffers and memory.
+			vkDestroyBuffer(_device._logical, stagingBuffer, nullptr);
+			vkFreeMemory(_device._logical, stagingMemory, nullptr);
 
 			return RendererResult::Success;
 		}
 
-		void Renderer::DestroyVertexBuffer(VkBuffer buffer, VkDeviceMemory memory) const
+		RendererResult Renderer::CreateVertexBuffer(boost::container::vector<Vertex>& vertices, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const
+		{
+			VkDeviceSize size = sizeof(Vertex) * vertices.size();
+			
+			// Create a temporary buffer to "stage" vertex data before GPU transfer.
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingMemory;
+			CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+									  &stagingBuffer, &stagingMemory), RendererResult::Success, RendererResult::Failure);
+			
+			// Map pointer to staging buffer location and transfer data.
+			void* data;
+			CHECK_RESULT(vkMapMemory(_device._logical, stagingMemory, 0, size, 0, &data), VK_SUCCESS, RendererResult::Failure);
+			Memory::NMemCpy(data, vertices.data(), (usize)size);
+			vkUnmapMemory(_device._logical, stagingMemory);
+
+			// Create the actual vertex buffer located in the GPU and copy data over to it.
+			CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+									  outBuffer, outMemory), RendererResult::Success, RendererResult::Failure);
+			CHECK_RESULT(CopyBuffer(stagingBuffer, *outBuffer, size), RendererResult::Success, RendererResult::Failure);
+
+			// Cleanup temporary staging buffers and memory.
+			vkDestroyBuffer(_device._logical, stagingBuffer, nullptr);
+			vkFreeMemory(_device._logical, stagingMemory, nullptr);
+
+			return RendererResult::Success;
+		}
+
+		void Renderer::DestroyBuffer(VkBuffer buffer, VkDeviceMemory memory) const
 		{
 			vkDestroyBuffer(_device._logical, buffer, nullptr);
 			vkFreeMemory(_device._logical, memory, nullptr);
+		}
+
+		RendererResult Renderer::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) const
+		{
+			// Create command buffer for transfer operations.
+			VkCommandBuffer transferBuffer;
+			VkCommandBufferAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocateInfo.commandPool = _graphicsPool;
+			allocateInfo.commandBufferCount = 1;
+
+			CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, &transferBuffer), VK_SUCCESS, RendererResult::Failure);
+
+			// Begin command buffer as optimized for one-time usage.
+			VkCommandBufferBeginInfo beginInfo = {};
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+			// Configure region of buffers to copy from.
+			VkBufferCopy region = {};
+			region.srcOffset = 0;
+			region.dstOffset = 0;
+			region.size = size;
+
+			// Start recording commands for the transfer buffer.
+			CHECK_RESULT(vkBeginCommandBuffer(transferBuffer, &beginInfo), VK_SUCCESS, RendererResult::Failure);
+
+			vkCmdCopyBuffer(transferBuffer, src, dst, 1, &region);
+
+			CHECK_RESULT(vkEndCommandBuffer(transferBuffer), VK_SUCCESS, RendererResult::Failure);
+
+			// Configure queue submission information.
+			VkSubmitInfo submitInfo = {};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &transferBuffer;
+
+			// Submit command to queue and wait until it finishes.
+			CHECK_RESULT(vkQueueSubmit(_transferQueue, 1, &submitInfo, VK_NULL_HANDLE), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkQueueWaitIdle(_transferQueue), VK_SUCCESS, RendererResult::Failure);
+
+			// Free temporary command buffer.
+			vkFreeCommandBuffers(_device._logical, _graphicsPool, 1, &transferBuffer);
+
+			return RendererResult::Success;
 		}
 
 		VkSurfaceFormatKHR Renderer::ChooseBestSurfaceFormat(const boost::container::vector<VkSurfaceFormatKHR>& formats) const
@@ -578,7 +677,7 @@ namespace Re
 			auto familyInfo = GetQueueFamilyInfo(_device._physical);
 			boost::container::set<i32> queueFamilies = { familyInfo._graphicsFamily, familyInfo._presentationFamily };
 			boost::container::vector<VkDeviceQueueCreateInfo> queueInfos(queueFamilies.size());
-			float queuePriorities = 1.0f;
+			float queuePriorities[] = { 1.0f, 1.0f };
 
 			// Create the information regarding the queues that will be used from the logical device.
 			for (auto& family : queueFamilies)
@@ -586,8 +685,8 @@ namespace Re
 				// Configure queue info for specified family.
 				queueInfos[family].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 				queueInfos[family].queueFamilyIndex = family;
-				queueInfos[family].queueCount = 1;
-				queueInfos[family].pQueuePriorities = &queuePriorities;
+				queueInfos[family].queueCount = 2;
+				queueInfos[family].pQueuePriorities = queuePriorities;
 			}
 
 			// Construct the features from the device that we are going to use.
@@ -607,6 +706,7 @@ namespace Re
 			// Retrieve the queues created by the logical device and store handles.
 			vkGetDeviceQueue(_device._logical, familyInfo._graphicsFamily, 0, &_graphicsQueue);
 			vkGetDeviceQueue(_device._logical, familyInfo._presentationFamily, 0, &_presentationQueue);
+			vkGetDeviceQueue(_device._logical, familyInfo._graphicsFamily, 1, &_transferQueue);
 
 			return RendererResult::Success;
 		}
@@ -978,19 +1078,22 @@ namespace Re
 
 		RendererResult Renderer::CreateCommandBuffers()
 		{
+			VkCommandBufferAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+			// Create command buffers for graphical operations.
 			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
 			{
 				_commandBuffers[i].resize(_swapchainFramebuffers.size());
 
-				VkCommandBufferAllocateInfo allocateInfo = {};
-				allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+				// Configure allocation for specific command buffer set.
 				allocateInfo.commandPool = _graphicsPool;
-				allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 				allocateInfo.commandBufferCount = static_cast<u32>(_commandBuffers[i].size());
 
 				CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, _commandBuffers[i].data()), VK_SUCCESS, RendererResult::Failure);
 			}
-			
+
 			return RendererResult::Success;
 		}
 
@@ -1022,7 +1125,7 @@ namespace Re
 		RendererResult Renderer::RecordCommands()
 		{
 			// Load next inactive command buffer.
-			usize inactive = (_currentBuffer.load(boost::memory_order_relaxed) + 1) % COMMAND_BUFFER_SETS;
+			usize inactive = (_currentBuffer.load() + 1) % COMMAND_BUFFER_SETS;
 
 			// Information about how to begin a command buffer.
 			VkCommandBufferBeginInfo bufferBeginInfo = {};
@@ -1059,19 +1162,20 @@ namespace Re
 				{
 					vkCmdBindPipeline(_commandBuffers[inactive][i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
 
-					// Acquire required information from the entities to be rendered.
-					boost::container::vector<VkBuffer> vertexBuffers;
-					boost::container::vector<VkDeviceSize> vertexOffsets;
-					u32 vertexCount = 0;
-					for (const auto& ent : _entitiesToRender)
+					// Draw each renderable entity that has been streamed over to the renderer.
+					for (const auto& entity : _entitiesToRender)
 					{
-						vertexBuffers.emplace_back(ent.second._vertexBuffer);
-						vertexOffsets.emplace_back(0);
-						vertexCount += ent.second._vertexCount;
-					}
+						// Acquire required information from the entities to be rendered.
+						VkBuffer vertexBuffer = entity.second._vertexBuffer;
+						VkBuffer indexBuffer = entity.second._indexBuffer;
+						VkDeviceSize offsets[] = { 0 };
+						u32 count = entity.second._indexCount;
 
-					vkCmdBindVertexBuffers(_commandBuffers[inactive][i], 0, 1, vertexBuffers.data(), vertexOffsets.data());
-					vkCmdDraw(_commandBuffers[inactive][i], vertexCount, 1, 0, 0);
+						// Add rendering commands to the buffer.
+						vkCmdBindVertexBuffers(_commandBuffers[inactive][i], 0, 1, &vertexBuffer, offsets);
+						vkCmdBindIndexBuffer(_commandBuffers[inactive][i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+						vkCmdDrawIndexed(_commandBuffers[inactive][i], count, 1, 0, 0, 0);
+					}
 				}
 
 				vkCmdEndRenderPass(_commandBuffers[inactive][i]);
@@ -1080,7 +1184,7 @@ namespace Re
 			
 			// Update current command buffer being rendered to the screen.
 			printf("Recording Commands...\n");
-			_currentBuffer.store(inactive, boost::memory_order_release);
+			_currentBuffer.store(inactive);
 			return RendererResult::Success;
 		}
 		
@@ -1089,7 +1193,8 @@ namespace Re
 			// Destroy each of the existing rendarable entities.
 			for (auto& ent : _entitiesToRender)
 			{
-				DestroyVertexBuffer(ent.second._vertexBuffer, ent.second._vertexMemory);
+				DestroyBuffer(ent.second._vertexBuffer, ent.second._vertexMemory);
+				DestroyBuffer(ent.second._indexBuffer, ent.second._indexMemory);
 			}
 			
 			_entitiesToRender.clear();

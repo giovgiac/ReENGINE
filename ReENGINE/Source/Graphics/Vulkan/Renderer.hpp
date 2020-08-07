@@ -54,6 +54,10 @@ namespace Re
 				VkBuffer _vertexBuffer;
 				VkDeviceMemory _vertexMemory;
 				i32 _vertexCount;
+
+				VkBuffer _indexBuffer;
+				VkDeviceMemory _indexMemory;
+				i32 _indexCount;
 			};
 
 			struct TransferInfo
@@ -115,12 +119,17 @@ namespace Re
 			SwapchainInfo GetSwapchainInfo(VkPhysicalDevice device) const;
 
 			// Support create functions.
+			RendererResult CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const;
 			RendererResult CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags flags, VkImageView* outView) const;
 			RendererResult CreateShaderModule(const boost::container::vector<char>& raw, VkShaderModule* outModule) const;
+			RendererResult CreateIndexBuffer(boost::container::vector<u32>& indices, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const;
 			RendererResult CreateVertexBuffer(boost::container::vector<Vertex>& vertices, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const;
 
 			// Support destroy functions.
-			void DestroyVertexBuffer(VkBuffer buffer, VkDeviceMemory memory) const;
+			void DestroyBuffer(VkBuffer buffer, VkDeviceMemory memory) const;
+
+			// Support transfer functions.
+			RendererResult CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) const;
 
 			// Choose functions.
 			VkSurfaceFormatKHR ChooseBestSurfaceFormat(const boost::container::vector<VkSurfaceFormatKHR>& formats) const;
@@ -157,12 +166,12 @@ namespace Re
 			#endif
 
 		private:
-			// Multithreading members.
-			boost::lockfree::queue<TransferInfo> _transferQueue;
-			boost::thread _transferThread;
-			boost::mutex _transferMutex;
-			boost::condition_variable _transferRequested;
-			boost::atomic<bool> _transferThreadShouldClose;
+			// Streaming-related members.
+			boost::lockfree::queue<TransferInfo> _streamingQueue;
+			boost::thread _streamingThread;
+			boost::mutex _streamingMutex;
+			boost::condition_variable _streamingRequested;
+			boost::atomic<bool> _streamingThreadShouldClose;
 			
 			// Vulkan-related members.
 			VkInstance _instance;
@@ -185,6 +194,10 @@ namespace Re
 			VkPipelineLayout _pipelineLayout;
 			VkRenderPass _renderPass;
 			VkCommandPool _graphicsPool;
+
+			// Transfer-related members.
+			VkQueue _transferQueue;
+			VkCommandPool _transferPool;
 
 			// Vulkan configuration members.
 			VkFormat _swapchainFormat;

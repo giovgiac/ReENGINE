@@ -59,14 +59,23 @@ public:
 NewtonManager nNewtonManager;
 TestGame nGameManager;
 
-boost::container::vector<Re::Graphics::Vertex> vertices = {
-	{ +0.4f, -0.4f, +0.0f,		+1.0f, +0.0f, +0.0f },
-	{ +0.4f, +0.4f, +0.0f,		+0.0f, +1.0f, +0.0f },
-	{ -0.4f, +0.4f, +0.0f,		+0.0f, +0.0f, +1.0f },
+boost::container::vector<Re::Graphics::Vertex> vertices_left = {
+	{ -0.1f, -0.4f, +0.0f,		+1.0f, +0.0f, +0.0f },
+	{ -0.1f, +0.4f, +0.0f,		+0.0f, +1.0f, +0.0f },
+	{ -0.9f, +0.4f, +0.0f,		+0.0f, +0.0f, +1.0f },
+	{ -0.9f, -0.4f, +0.0f,		+1.0f, +1.0f, +0.0f },
+};
 
-	{ -0.4f, +0.4f, +0.0f,		+0.0f, +0.0f, +1.0f },
-	{ -0.4f, -0.4f, +0.0f,		+1.0f, +1.0f, +0.0f },
-	{ +0.4f, -0.4f, +0.0f,		+1.0f, +0.0f, +0.0f },
+boost::container::vector<Re::Graphics::Vertex> vertices_right = {
+	{ +0.9f, -0.2f, +0.0f,		+1.0f, +0.0f, +0.0f },
+	{ +0.9f, +0.2f, +0.0f,		+0.0f, +1.0f, +0.0f },
+	{ +0.1f, +0.2f, +0.0f,		+0.0f, +0.0f, +1.0f },
+	{ +0.1f, -0.2f, +0.0f,		+1.0f, +1.0f, +0.0f },
+};
+
+boost::container::vector<u32> indices = {
+	0, 1, 2,
+	2, 3, 0,
 };
 
 #define NUM_ENTITIES 1
@@ -82,11 +91,17 @@ int main()
 
 	World world;
 	
-	for (usize i = 0; i < NUM_ENTITIES; ++i)
-	{
-		auto ent = world.SpawnEntity<Entity>();
-		ent->AddComponent<Re::Components::RenderComponent>(vertices);
-	}
+	//for (usize i = 0; i < NUM_ENTITIES; ++i)
+	//{
+	//	auto ent = world.SpawnEntity<Entity>();
+	//	ent->AddComponent<Re::Components::RenderComponent>(vertices_left, indices);
+	//}
+
+	auto ent_left = world.SpawnEntity<Entity>();
+	ent_left->AddComponent<Re::Components::RenderComponent>(vertices_left, indices);
+
+	//auto ent_right = world.SpawnEntity<Entity>();
+	//ent_right->AddComponent<Re::Components::RenderComponent>(vertices_right, indices);
 
 	world.Startup();
 	world.Loop();

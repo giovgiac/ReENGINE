@@ -7,6 +7,20 @@
 
 #include "World.hpp"
 
+#include "Components/RenderComponent.hpp"
+
+boost::container::vector<Re::Graphics::Vertex> vert = {
+	{ +0.9f, -0.2f, +0.0f,		+1.0f, +0.0f, +0.0f },
+	{ +0.9f, +0.2f, +0.0f,		+0.0f, +1.0f, +0.0f },
+	{ +0.1f, +0.2f, +0.0f,		+0.0f, +0.0f, +1.0f },
+	{ +0.1f, -0.2f, +0.0f,		+1.0f, +1.0f, +0.0f },
+};
+
+boost::container::vector<u32> ind = {
+	0, 1, 2,
+	2, 3, 0,
+};
+
 namespace Re
 {
 	namespace Core
@@ -37,6 +51,8 @@ namespace Re
 
 		void World::Loop()
 		{
+			bool bAdded = false;
+
 			_timer.Reset();
 			_timer.Start();
 			while (!_window.GetShouldClose())
@@ -44,6 +60,13 @@ namespace Re
 				_window.PollEvents();
 				_timer.Tick();
 				_renderer.Render();
+
+				if (_timer.ElapsedTime() >= 5.0f && !bAdded)
+				{
+					auto entity = SpawnEntity<Entity>();
+					entity->AddComponent<Components::RenderComponent>(vert, ind);
+					bAdded = true;
+				}
 			}
 		}
 

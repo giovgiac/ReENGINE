@@ -14,8 +14,8 @@ namespace Re
 {
 	namespace Components
 	{
-		RenderComponent::RenderComponent(boost::container::vector<Graphics::Vertex>& vertices)
-			: _vertices(vertices)
+		RenderComponent::RenderComponent(boost::container::vector<Graphics::Vertex>& vertices, boost::container::vector<u32>& indices)
+			: _vertices(vertices), _indices(indices)
 		{}
 
 		void RenderComponent::Initialize()
