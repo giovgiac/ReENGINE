@@ -78,7 +78,7 @@ boost::container::vector<u32> indices = {
 	2, 3, 0,
 };
 
-#define NUM_ENTITIES 1
+#define NUM_ENTITIES 256
 
 /* TESTING CLASS - TO BE FULLY IMPLEMENTED LATER */
 // WINDOWS MAIN: i32 WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, i32) 
@@ -100,8 +100,8 @@ int main()
 	auto ent_left = world.SpawnEntity<Entity>();
 	ent_left->AddComponent<Re::Components::RenderComponent>(vertices_left, indices);
 
-	//auto ent_right = world.SpawnEntity<Entity>();
-	//ent_right->AddComponent<Re::Components::RenderComponent>(vertices_right, indices);
+	auto ent_right = world.SpawnEntity<Entity>();
+	ent_right->AddComponent<Re::Components::RenderComponent>(vertices_right, indices);
 
 	world.Startup();
 	world.Loop();

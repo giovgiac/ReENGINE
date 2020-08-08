@@ -61,12 +61,12 @@ namespace Re
 				_timer.Tick();
 				_renderer.Render();
 
-				if (_timer.ElapsedTime() >= 5.0f && !bAdded)
-				{
-					auto entity = SpawnEntity<Entity>();
-					entity->AddComponent<Components::RenderComponent>(vert, ind);
-					bAdded = true;
-				}
+				//if (_timer.ElapsedTime() >= 10.0f && !bAdded)
+				//{
+				//	auto entity = SpawnEntity<Entity>();
+				//	entity->AddComponent<Components::RenderComponent>(vert, ind);
+				//	bAdded = true;
+				//}
 			}
 		}
 

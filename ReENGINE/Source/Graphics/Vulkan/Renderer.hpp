@@ -17,6 +17,7 @@
 #include "Math/Vector3.hpp"
 
 #include <boost/atomic.hpp>
+#include <boost/bimap.hpp>
 #include <boost/container/map.hpp>
 #include <boost/container/vector.hpp>
 #include <boost/lockfree/queue.hpp>
@@ -52,11 +53,9 @@ namespace Re
 			struct RenderInfo
 			{
 				VkBuffer _vertexBuffer;
-				VkDeviceMemory _vertexMemory;
 				i32 _vertexCount;
 
 				VkBuffer _indexBuffer;
-				VkDeviceMemory _indexMemory;
 				i32 _indexCount;
 			};
 
@@ -66,16 +65,41 @@ namespace Re
 				bool _isRemoval;
 			};
 
+			struct IndexInfo
+			{
+				VkBuffer _buffer;
+				VkDeviceSize _size;
+				boost::container::vector<u32> _indices;
+			};
+
+			struct VertexInfo
+			{
+				VkBuffer _buffer;
+				VkDeviceSize _size;
+				boost::container::vector<Vertex> _vertices;
+			};
+
 			// Vulkan-related structures.
 
 			struct QueueFamilyInfo
 			{
 				i32 _graphicsFamily = -1;
 				i32 _presentationFamily = -1;
+				i32 _transferFamily = -1;
+
+				bool HasDedicatedPresentation() const
+				{
+					return _graphicsFamily != _presentationFamily;
+				}
+
+				bool HasDedicatedTransfer() const
+				{
+					return _graphicsFamily != _transferFamily;
+				}
 
 				bool IsValid() const
 				{
-					return _graphicsFamily >= 0 && _presentationFamily >= 0;
+					return _graphicsFamily >= 0 && _presentationFamily >= 0 && _transferFamily >= 0;
 				}
 			};
 
@@ -119,17 +143,20 @@ namespace Re
 			SwapchainInfo GetSwapchainInfo(VkPhysicalDevice device) const;
 
 			// Support create functions.
-			RendererResult CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const;
+			RendererResult CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* outBuffer);
 			RendererResult CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags flags, VkImageView* outView) const;
 			RendererResult CreateShaderModule(const boost::container::vector<char>& raw, VkShaderModule* outModule) const;
-			RendererResult CreateIndexBuffer(boost::container::vector<u32>& indices, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const;
-			RendererResult CreateVertexBuffer(boost::container::vector<Vertex>& vertices, VkBuffer* outBuffer, VkDeviceMemory* outMemory) const;
+			RendererResult CreateIndexBuffer(boost::container::vector<u32>& indices, VkBuffer* outBuffer);
+			RendererResult CreateVertexBuffer(boost::container::vector<Vertex>& vertices, VkBuffer* outBuffer);
 
 			// Support destroy functions.
-			void DestroyBuffer(VkBuffer buffer, VkDeviceMemory memory) const;
+			void DestroyBuffer(VkBuffer buffer);
 
 			// Support transfer functions.
 			RendererResult CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) const;
+			RendererResult ExecuteTransferOperations();
+			RendererResult StageIndexBuffer(VkDeviceSize bufferSize, VkBuffer* stagingBuffer, VkDeviceMemory* stagingMemory);
+			RendererResult StageVertexBuffer(VkDeviceSize bufferSize, VkBuffer* stagingBuffer, VkDeviceMemory* stagingMemory);
 
 			// Choose functions.
 			VkSurfaceFormatKHR ChooseBestSurfaceFormat(const boost::container::vector<VkSurfaceFormatKHR>& formats) const;
@@ -151,6 +178,7 @@ namespace Re
 			RendererResult RecordCommands();
 
 			// Destroy functions.
+			void DestroyCommandPools();
 			void DestroyEntities();
 			void DestroySwapchain();
 			void DestroyFramebuffers();
@@ -198,6 +226,10 @@ namespace Re
 			// Transfer-related members.
 			VkQueue _transferQueue;
 			VkCommandPool _transferPool;
+			boost::bimap<VkBuffer, VkDeviceMemory> _bufferMemory;
+			boost::container::vector<VertexInfo> _vertexBuffersToTransfer;
+			boost::container::vector<IndexInfo> _indexBuffersToTransfer;
+
 
 			// Vulkan configuration members.
 			VkFormat _swapchainFormat;
