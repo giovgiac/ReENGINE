@@ -13,85 +13,116 @@ namespace Re
 {
 	namespace Math
 	{
-		NVector3 NVector3::Add(const NVector3& InOther)
+		Vector3& Vector3::Add(const Vector3& InOther)
 		{
-			NVector3 Result;
+			// Perform element-wise vector addition.
+			X += InOther.X;
+			Y += InOther.Y;
+			Z += InOther.Z;
 
-			Result.X = X + InOther.X;
-			Result.Y = Y + InOther.Y;
-			Result.Z = Z + InOther.Z;
-			return Result;
+			return *this;
 		}
 
-		NVector3 NVector3::Cross(const NVector3& InOther)
+		Vector3& Vector3::Cross(const Vector3& InOther)
 		{
-			NVector3 Result;
+			Vector3 Result;
 
+			// Perform three-dimensional vector cross product.
 			Result.X = Y * InOther.Z - Z * InOther.Y;
 			Result.Y = Z * InOther.X - X * InOther.Z;
 			Result.Z = X * InOther.Y - Y * InOther.X;
-			return Result;
+			*this = Result;
+
+			return *this;
 		}
 
-		f32 NVector3::Dot(const NVector3& InOther) const {
+		f32 Vector3::Dot(const Vector3& InOther) const 
+		{
 			return (X * InOther.X + Y * InOther.Y + Z * InOther.Z);
 		}
 
-		NVector3 NVector3::Divide(const f32 InScalar) {
+		Vector3& Vector3::Divide(const f32 InScalar) 
+		{
 			ASSERT(InScalar != 0);
 
-			NVector3 Result;
+			// Perform element-wise vector division.
+			X /= InScalar;
+			Y /= InScalar;
+			Z /= InScalar;
 
-			Result.X = X / InScalar;
-			Result.Y = Y / InScalar;
-			Result.Z = Z / InScalar;
-			return Result;
+			return *this;
 		}
 
-		f32 NVector3::Length() const {
+		f32 Vector3::Length() const 
+		{
 			return sqrtf(powf(X, 2) + powf(Y, 2) + powf(Z, 2));
 		}
 
-		NVector3 NVector3::Normalize() {
+		Vector3& Vector3::Normalize() 
+		{
 			f32 Magnitude = Length();
-			NVector3 Result;
 
-			Result.X = X / Magnitude;
-			Result.Y = Y / Magnitude;
-			Result.Z = Z / Magnitude;
+			X /= Magnitude;
+			Y /= Magnitude;
+			Z /= Magnitude;
+			return *this;
+		}
+
+		Vector3& Vector3::Multiply(const f32 InScalar) 
+		{
+			// Perform element-wise vector multiplication.
+			X *= InScalar;
+			Y *= InScalar;
+			Z *= InScalar;
+
+			return *this;
+		}
+
+		Vector3& Vector3::Subtract(const Vector3& InOther) 
+		{
+			// Perform element-wise vector subtraction.
+			X -= InOther.X;
+			Y -= InOther.Y;
+			Z -= InOther.Z;
+
+			return *this;
+		}
+
+		Vector3 Vector3::Cross(const Vector3& InLeft, const Vector3& InRight) 
+		{
+			return Vector3(InLeft.Y * InRight.Z - InLeft.Z * InRight.Y, InLeft.Z * InRight.X - InLeft.X * InRight.Z, InLeft.X * InRight.Y - InLeft.Y * InRight.X);
+		}
+
+		Vector3& Vector3::operator+=(const Vector3& InOther) { return Add(InOther); }
+		Vector3& Vector3::operator-=(const Vector3& InOther) { return Subtract(InOther); }
+		Vector3& Vector3::operator*=(const f32 InScalar) { return Multiply(InScalar); }
+		Vector3& Vector3::operator/=(const f32 InScalar) { return Divide(InScalar); }
+
+		bool Vector3::operator==(const Vector3& InOther)
+		{
+			return	X == InOther.X && Y == InOther.Y && Z == InOther.Z;
+		}
+
+		bool Vector3::operator!=(const Vector3& InOther)
+		{
+			return !this->operator==(InOther);
+		}
+
+		Vector3 Vector3::operator-() const
+		{
+			Vector3 Result;
+
+			// Invert individual components.
+			Result.X = -X;
+			Result.Y = -Y;
+			Result.Z = -Z;
+
 			return Result;
 		}
 
-		NVector3 NVector3::Multiply(const f32 InScalar) {
-			NVector3 Result;
-
-			Result.X = X * InScalar;
-			Result.Y = Y * InScalar;
-			Result.Z = Z * InScalar;
-			return Result;
-		}
-
-		NVector3 NVector3::Subtract(const NVector3& InOther) {
-			NVector3 Result;
-
-			Result.X = X - InOther.X;
-			Result.Y = Y - InOther.Y;
-			Result.Z = Z - InOther.Z;
-			return Result;
-		}
-
-		NVector3 NVector3::Cross(const NVector3& InLeft, const NVector3& InRight) {
-			return NVector3(InLeft.Y * InRight.Z - InLeft.Z * InRight.Y, InLeft.Z * InRight.X - InLeft.X * InRight.Z, InLeft.X * InRight.Y - InLeft.Y * InRight.X);
-		}
-
-		NVector3& NVector3::operator+=(const NVector3& InOther) { return Add(InOther); }
-		NVector3& NVector3::operator-=(const NVector3& InOther) { return Subtract(InOther); }
-		NVector3& NVector3::operator*=(const f32 InScalar) { return Multiply(InScalar); }
-		NVector3& NVector3::operator/=(const f32 InScalar) { return Divide(InScalar); }
-
-		NVector3 operator+(NVector3 InLeft, const NVector3& InRight) { return InLeft.Add(InRight); }
-		NVector3 operator-(NVector3 InLeft, const NVector3& InRight) { return InLeft.Subtract(InRight); }
-		NVector3 operator*(NVector3 InVector, const f32 InScalar) { return InVector.Multiply(InScalar); }
-		NVector3 operator/(NVector3 InVector, const f32 InScalar) { return InVector.Divide(InScalar); }
+		Vector3 operator+(Vector3 InLeft, const Vector3& InRight) { return InLeft.Add(InRight); }
+		Vector3 operator-(Vector3 InLeft, const Vector3& InRight) { return InLeft.Subtract(InRight); }
+		Vector3 operator*(Vector3 InVector, const f32 InScalar) { return InVector.Multiply(InScalar); }
+		Vector3 operator/(Vector3 InVector, const f32 InScalar) { return InVector.Divide(InScalar); }
 	}
 }

@@ -10,9 +10,14 @@
 #ifdef PLATFORM_USE_VULKAN
 
 #include "Components/RenderComponent.hpp"
+#include "Components/TransformComponent.hpp"
+#include "Math/Color.hpp"
 #include "Memory/Memory.hpp"
 
 #include <boost/container/set.hpp>
+#include <boost/foreach.hpp>
+#include <boost/range/join.hpp>
+
 #include <fstream>
 
 static const boost::container::vector<const utf8*> instanceExtensions = {
@@ -71,18 +76,25 @@ static Re::Graphics::RendererResult ReadShader(const utf8* filename, boost::cont
 	return Re::Graphics::RendererResult::Success;
 }
 
+Re::Math::Color::operator VkClearColorValue() const
+{
+	return { Red, Green, Blue, Alpha };
+}
+
 namespace Re
 {
 	namespace Graphics
 	{
 		Renderer::Renderer()
-			: _currentBuffer(0), _currentFrame(0), _streamingQueue(128), _streamingThreadShouldClose(false)
+			: _currentBuffer(0), _currentFrame(0), _streamingQueue(128), _streamingThreadShouldClose(false),
+			_indexStagingBuffer(VK_NULL_HANDLE), _vertexStagingBuffer(VK_NULL_HANDLE), 
+			_indexStagingMemory(VK_NULL_HANDLE), _vertexStagingMemory(VK_NULL_HANDLE)
 		{}
 
-		bool Renderer::AddEntity(Core::Entity* newEntity)
+		bool Renderer::AddEntity(Core::Entity* entity)
 		{
 			TransferInfo info = {};
-			info._entity = newEntity;
+			info._entity = entity;
 			info._isRemoval = false;
 
 			bool pushed = _streamingQueue.push(info);
@@ -104,15 +116,18 @@ namespace Re
 		RendererResult Renderer::Render()
 		{
 			// Enforce maximum number of drawable frames with fences.
-			CHECK_RESULT(vkWaitForFences(_device._logical, 1, &_drawFences[_currentFrame], VK_TRUE, -1), VK_SUCCESS, RendererResult::Failure);
-			CHECK_RESULT(vkResetFences(_device._logical, 1, &_drawFences[_currentFrame]), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkWaitForFences(_device._logical, 1, &_drawFences[_currentFrame], VK_TRUE, -1), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkResetFences(_device._logical, 1, &_drawFences[_currentFrame]), VK_SUCCESS, RendererResult::Failure)
 
 			// Get next image to render to (and signal when succeeded).
 			u32 imageIndex;
-			CHECK_RESULT(vkAcquireNextImageKHR(_device._logical, _swapchain, -1, _imageAvailable[_currentFrame], VK_NULL_HANDLE, &imageIndex), VK_SUCCESS, RendererResult::Failure);
-
+			CHECK_RESULT(vkAcquireNextImageKHR(_device._logical, _swapchain, -1, _imageAvailable[_currentFrame], VK_NULL_HANDLE, &imageIndex), VK_SUCCESS, RendererResult::Failure)
+			
 			// Load the value of the current set of command buffers to use.
 			usize current = _currentBuffer.load();
+
+			// Re-write the command buffers to update values, if not already rerecording.
+			CHECK_RESULT(RecordCommands(current, imageIndex, 1), RendererResult::Success, RendererResult::Failure);
 
 			// Define stages that we need to wait for semaphores.
 			VkPipelineStageFlags waitStages[] = {
@@ -130,7 +145,7 @@ namespace Re
 			submitInfo.signalSemaphoreCount = 1;
 			submitInfo.pSignalSemaphores = &_renderFinished[_currentFrame];
 			
-			CHECK_RESULT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _drawFences[_currentFrame]), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkQueueSubmit(_graphicsQueue, 1, &submitInfo, _drawFences[_currentFrame]), VK_SUCCESS, RendererResult::Failure)
 
 			// Present rendered image to screen.
 			VkPresentInfoKHR presentInfo = {};
@@ -141,7 +156,7 @@ namespace Re
 			presentInfo.pSwapchains = &_swapchain;
 			presentInfo.pImageIndices = &imageIndex;
 			
-			CHECK_RESULT(vkQueuePresentKHR(_presentationQueue, &presentInfo), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkQueuePresentKHR(_presentationQueue, &presentInfo), VK_SUCCESS, RendererResult::Failure)
 
 			_currentFrame = (_currentFrame + 1) % MAX_FRAME_DRAWS;
 			return RendererResult::Success;
@@ -153,23 +168,28 @@ namespace Re
 			_window = &window;
 
 			// Vulkan startup
-			CHECK_RESULT_WITH_ERROR(CreateInstance(), RendererResult::Success, NTEXT("Failed to create instance!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(CreateInstance(), RendererResult::Success, NTEXT("Failed to create instance!\n"), RendererResult::Failure)
 			#if _DEBUG
-			CHECK_RESULT_WITH_ERROR(CreateDebugCallback(), RendererResult::Success, NTEXT("Failed to create debug callback!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(CreateDebugCallback(), RendererResult::Success, NTEXT("Failed to create debug callback!\n"), RendererResult::Failure)
 			#endif
 			#if PLATFORM_WINDOWS
-			CHECK_RESULT_WITH_ERROR(CreateWindowsSurface(window), RendererResult::Success, NTEXT("Failed to create surface in Windows!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(CreateWindowsSurface(window), RendererResult::Success, NTEXT("Failed to create surface in Windows!\n"), RendererResult::Failure)
 			#endif
-			CHECK_RESULT_WITH_ERROR(RetrievePhysicalDevice(), RendererResult::Success, NTEXT("Failed to retrieve appropriate physical device!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(CreateLogicalDevice(), RendererResult::Success, NTEXT("Failed to create logical device!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(CreateSwapchain(), RendererResult::Success, NTEXT("Failed to create swapchain!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(CreateRenderPass(), RendererResult::Success, NTEXT("Failed to create renderpass!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(CreateGraphicsPipeline(), RendererResult::Success, NTEXT("Failed to create graphics pipeline!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(CreateFramebuffers(), RendererResult::Success, NTEXT("Failed to create framebuffers!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(CreateCommandPools(), RendererResult::Success, NTEXT("Failed to create command pools!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(CreateCommandBuffers(), RendererResult::Success, NTEXT("Failed to create command buffers!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(RecordCommands(), RendererResult::Success, NTEXT("Failed to record commands!\n"), RendererResult::Failure);
-			CHECK_RESULT_WITH_ERROR(CreateSynchronization(), RendererResult::Success, NTEXT("Failed to create synchronization!\n"), RendererResult::Failure);
+			CHECK_RESULT_WITH_ERROR(RetrievePhysicalDevice(), RendererResult::Success, NTEXT("Failed to retrieve appropriate physical device!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateLogicalDevice(), RendererResult::Success, NTEXT("Failed to create logical device!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateSwapchain(), RendererResult::Success, NTEXT("Failed to create swapchain!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateDepthBufferImage(), RendererResult::Success, NTEXT("Failed to create depth buffer image!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateRenderPass(), RendererResult::Success, NTEXT("Failed to create renderpass!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateDescriptorSetLayout(), RendererResult::Success, NTEXT("Failed to create descriptor set layout!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreatePushConstantRanges(), RendererResult::Success, NTEXT("Failed to create push constant range!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateGraphicsPipeline(), RendererResult::Success, NTEXT("Failed to create graphics pipeline!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateFramebuffers(), RendererResult::Success, NTEXT("Failed to create framebuffers!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateCommandPools(), RendererResult::Success, NTEXT("Failed to create command pools!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateCommandBuffers(), RendererResult::Success, NTEXT("Failed to create command buffers!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateUniformBuffers(), RendererResult::Success, NTEXT("Failed to create uniform buffers!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateDescriptorPool(), RendererResult::Success, NTEXT("Failed to create descriptor pool!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateDescriptorSets(), RendererResult::Success, NTEXT("Failed to create descriptor sets!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateSynchronization(), RendererResult::Success, NTEXT("Failed to create synchronization!\n"), RendererResult::Failure)
 
 			// Transfer thread startup
 			_streamingThreadShouldClose.store(false, boost::memory_order_release);
@@ -187,14 +207,18 @@ namespace Re
 
 			// Vulkan shutdown
 			vkDeviceWaitIdle(_device._logical);
-
+			
 			DestroyEntities();
 			DestroySynchronization();
+			vkDestroyDescriptorPool(_device._logical, _descriptorPool, nullptr);
+			vkDestroyDescriptorSetLayout(_device._logical, _descriptorSetLayout, nullptr);
+			DestroyUniformBuffers();
 			DestroyCommandPools();
 			DestroyFramebuffers();
 			vkDestroyPipeline(_device._logical, _graphicsPipeline, nullptr);
 			vkDestroyPipelineLayout(_device._logical, _pipelineLayout, nullptr);
 			vkDestroyRenderPass(_device._logical, _renderPass, nullptr);
+			DestroyDepthBufferImage();
 			DestroySwapchain();
 			vkDestroyDevice(_device._logical, nullptr);
 			vkDestroySurfaceKHR(_instance, _surface, nullptr);
@@ -202,6 +226,175 @@ namespace Re
 			DestroyDebugCallback();
 			#endif
 			vkDestroyInstance(_instance, nullptr);
+		}
+
+		RendererResult Renderer::ActivateLight(const boost::shared_ptr<Entities::DirectionalLight>& light)
+		{
+			// Load current command buffer.
+			usize current = _currentBuffer.load();
+
+			// Retrieve configuration values from the selected light.
+			_fragmentUniform._directionalLight._base._color = light->GetColor();
+			_fragmentUniform._directionalLight._base._ambientStrength = light->GetAmbientStrength();
+			_fragmentUniform._directionalLight._base._diffuseStrength = light->GetDiffuseStrength();
+			_fragmentUniform._directionalLight._direction = light->GetDirection();
+
+			// Update the fragment uniform buffer values.
+			UpdateFragmentUniformBuffers(current);
+
+			// Store specified light as active light.
+			_directionalLight = light;
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::ActivateLight(const boost::shared_ptr<Entities::PointLight>& light)
+		{
+			// Load current command buffer.
+			usize current = _currentBuffer.load();
+
+			// Update the fragment uniform with the point lights.
+			usize availableIndex = 0;
+			usize lightCount = 0;
+			bool inserted = false;
+			for (usize i = 0; i < _pointLights.size(); ++i)
+			{
+				if (_pointLights[i])
+				{
+					UpdatePointLight(&_fragmentUniform._pointLights[i], _pointLights[i]);
+					lightCount++;
+				}
+				else
+				{
+					// Insert element in available position, if not inserted.
+					if (!inserted)
+					{
+						UpdatePointLight(&_fragmentUniform._pointLights[i], light);
+						availableIndex = i;
+						lightCount++;
+						inserted = true;
+					}
+				}
+			}
+
+			// If failed to find slot, return with failure.
+			if (!inserted) return RendererResult::Failure;
+
+			// Update light count value in the uniform.
+			_fragmentUniform._pointLightCount = lightCount;
+
+			// Update the fragment uniform buffer values.
+			UpdateFragmentUniformBuffers(current);
+
+			// Add new light to the list of point lights.
+			_pointLights[availableIndex] = light;
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::ActivateLight(const boost::shared_ptr<Entities::SpotLight>& light)
+		{
+			// Load current command buffer.
+			usize current = _currentBuffer.load();
+
+			// Update the fragment uniform with the spot lights.
+			usize availableIndex = 0;
+			usize lightCount = 0;
+			bool inserted = false;
+			for (usize i = 0; i < _spotLights.size(); ++i)
+			{
+				if (_spotLights[i])
+				{
+					UpdateSpotLight(&_fragmentUniform._spotLights[i], _spotLights[i]);
+					lightCount++;
+				}
+				else
+				{
+					// Insert element in available position, if not inserted.
+					if (!inserted)
+					{
+						UpdateSpotLight(&_fragmentUniform._spotLights[i], light);
+						availableIndex = i;
+						lightCount++;
+						inserted = true;
+					}
+				}
+			}
+
+			// If failed to find slot, return with failure.
+			if (!inserted) return RendererResult::Failure;
+
+			// Update light count value in the uniform.
+			_fragmentUniform._spotLightCount = lightCount;
+
+			// Update the fragment uniform buffer values.
+			UpdateFragmentUniformBuffers(current);
+
+			// Add new light to the list of spot lights.
+			_spotLights[availableIndex] = light;
+			_spotLights[availableIndex]->OnParameterChanged.connect([=]() {
+				// Load current command buffer.
+				usize buffer = _currentBuffer.load();
+
+				UpdateSpotLight(&_fragmentUniform._spotLights[availableIndex], _spotLights[availableIndex]);
+				UpdateFragmentUniformBuffers(buffer);
+			});
+			return RendererResult::Success;
+		}
+
+		void Renderer::DeactivateLight(const boost::shared_ptr<Entities::PointLight>& light)
+		{
+			// Load current command buffer.
+			usize current = _currentBuffer.load();
+
+			for (usize i = 0; i < _pointLights.size(); ++i)
+			{
+				if (_pointLights[i] == light)
+				{
+					// Reset fragment uniform values to default.
+					_fragmentUniform._pointLights[i] = {};
+
+					// Remove point light reference from array.
+					_pointLights[i] = nullptr;
+				}
+			}
+
+			// Update the fragment uniform buffer values.
+			UpdateFragmentUniformBuffers(current);
+		}
+
+		void Renderer::DeactivateLight(const boost::shared_ptr<Entities::SpotLight>& light)
+		{
+			// Load current command buffer.
+			usize current = _currentBuffer.load();
+
+			for (usize i = 0; i < _spotLights.size(); ++i)
+			{
+				if (_spotLights[i] == light)
+				{
+					// Reset fragment uniform values to default.
+					_fragmentUniform._spotLights[i] = {};
+
+					// Remove spot light reference from array.
+					_spotLights[i] = nullptr;
+				}
+			}
+
+			// Update the fragment uniform buffer values.
+			UpdateFragmentUniformBuffers(current);
+		}
+
+		void Renderer::SetActiveCamera(const boost::shared_ptr<Entities::Camera>& newCamera)
+		{
+			// Load current command buffer.
+			usize current = _currentBuffer.load();
+
+			// Retrieve projection matrix from the selected camera.
+			_vertexUniform._projection = newCamera->GetProjection(static_cast<f32>(_swapchainExtent.width) / static_cast<f32>(_swapchainExtent.height));
+			
+			// Update the uniform buffer values.
+			UpdateVertexUniformBuffers(current);
+
+			// Store specified camera as active camera.
+			_activeCamera = newCamera;
 		}
 
 		void Renderer::EntityStreaming()
@@ -238,12 +431,23 @@ namespace Re
 									RenderInfo renderInfo = {};
 									renderInfo._indexCount = static_cast<i32>(indices.size());
 									renderInfo._vertexCount = static_cast<i32>(vertices.size());
+									renderInfo._material = renderComponent->GetMaterial();
 
 									// Create required buffers and images for the rendering.
 									CreateIndexBuffer(indices, &renderInfo._indexBuffer);
 									CreateVertexBuffer(vertices, &renderInfo._vertexBuffer);
 
-									_entitiesToRender.emplace_unique(transferInfo._entity, renderInfo);
+									// Record the model matrix of the entity.
+									if (transferInfo._entity->HasComponent<Components::TransformComponent>())
+									{
+										auto transformComponent = transferInfo._entity->GetComponent<Components::TransformComponent>();
+										if (transformComponent)
+										{
+											renderInfo._transformComponent = transformComponent;
+										}
+									}
+
+									_entitiesToTransfer.emplace_unique(transferInfo._entity, renderInfo);
 								}
 							}
 						}
@@ -261,13 +465,8 @@ namespace Re
 						}
 					}
 
-					// Execute transfer operations and re-record the commands after performing transfering operations.
-					if (ExecuteTransferOperations() != RendererResult::Success)
-					{
-						Core::Debug::Error(NTEXT("Error executing transfer operations!\n"));
-					}
-
-					RecordCommands();
+					// Execute pending transfer operations.
+					ExecuteTransferOperations();
 				}
 			}
 		}
@@ -275,7 +474,7 @@ namespace Re
 		RendererResult Renderer::RetrievePhysicalDevice()
 		{
 			u32 deviceCount = 0;
-			CHECK_RESULT(vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr), VK_SUCCESS, RendererResult::Failure)
 
 			// If there aren't any devices available, then Vulkan is not supported.
 			if (deviceCount == 0)
@@ -284,14 +483,23 @@ namespace Re
 			}
 
 			boost::container::vector<VkPhysicalDevice> devices(deviceCount);
-			CHECK_RESULT(vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data()), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data()), VK_SUCCESS, RendererResult::Failure)
 
 			// Pick an appropriate physical device from the available list.
 			for (auto& dev : devices)
 			{
 				if (CheckPhysicalDeviceSuitable(dev))
 				{
+					// Store suitable physical device as the chosen one.
 					_device._physical = dev;
+
+					// Retrieve properties of selected physical device.
+					VkPhysicalDeviceProperties deviceProperties;
+					vkGetPhysicalDeviceProperties(dev, &deviceProperties);
+
+					// Store physical device configurations for later use.
+					_minUniformBufferAlignment = deviceProperties.limits.minUniformBufferOffsetAlignment;
+
 					return RendererResult::Success;
 				}
 			}
@@ -433,9 +641,53 @@ namespace Re
 			return info;
 		}
 
-		RendererResult Renderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer* outBuffer)
+		usize Renderer::GetUniformAlignment(usize dataSize) const
+		{
+			return (dataSize + _minUniformBufferAlignment - 1) & ~(_minUniformBufferAlignment - 1);
+		}
+
+		RendererResult Renderer::AllocateBuffer(VkBuffer buffer, VkMemoryPropertyFlags properties, VkDeviceMemory* outMemory)
+		{
+			if (!outMemory) return RendererResult::Failure;
+
+			// Get buffer memory requirements.
+			VkMemoryRequirements requirements;
+			vkGetBufferMemoryRequirements(_device._logical, buffer, &requirements);
+
+			// Allocate memory to buffer.
+			VkMemoryAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocateInfo.allocationSize = requirements.size;
+			allocateInfo.memoryTypeIndex = FindMemoryTypeIndex(requirements.memoryTypeBits, properties);
+
+			CHECK_RESULT(vkAllocateMemory(_device._logical, &allocateInfo, nullptr, outMemory), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkBindBufferMemory(_device._logical, buffer, *outMemory, 0), VK_SUCCESS, RendererResult::Failure);
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::AllocateImage(VkImage image, VkMemoryPropertyFlags properties, VkDeviceMemory* outMemory)
+		{
+			if (!outMemory) return RendererResult::Failure;
+			
+			// Retrieve memory requirements for the created image.
+			VkMemoryRequirements memoryRequirements = {};
+			vkGetImageMemoryRequirements(_device._logical, image, &memoryRequirements);
+
+			// Allocate memory to image.
+			VkMemoryAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocateInfo.allocationSize = memoryRequirements.size;
+			allocateInfo.memoryTypeIndex = FindMemoryTypeIndex(memoryRequirements.memoryTypeBits, properties);
+
+			CHECK_RESULT(vkAllocateMemory(_device._logical, &allocateInfo, nullptr, outMemory), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkBindImageMemory(_device._logical, image, *outMemory, 0), VK_SUCCESS, RendererResult::Failure);
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer* outBuffer)
 		{
 			if (!outBuffer) return RendererResult::Failure;
+			if (size <= 0) return RendererResult::Failure;
 
 			VkBufferCreateInfo bufferInfo = {};
 			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -443,7 +695,31 @@ namespace Re
 			bufferInfo.usage = usage;
 			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-			CHECK_RESULT(vkCreateBuffer(_device._logical, &bufferInfo, nullptr, outBuffer), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateBuffer(_device._logical, &bufferInfo, nullptr, outBuffer), VK_SUCCESS, RendererResult::Failure)
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateImage(u32 width, u32 height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkImage* outImage)
+		{
+			if (!outImage) return RendererResult::Failure;
+
+			// Configure image that will be created.
+			VkImageCreateInfo createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+			createInfo.imageType = VK_IMAGE_TYPE_2D;
+			createInfo.extent.width = width;
+			createInfo.extent.height = height;
+			createInfo.extent.depth = 1;
+			createInfo.mipLevels = 1;
+			createInfo.arrayLayers = 1;
+			createInfo.format = format;
+			createInfo.tiling = tiling;
+			createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			createInfo.usage = usage;
+			createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+			createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			CHECK_RESULT(vkCreateImage(_device._logical, &createInfo, nullptr, outImage), VK_SUCCESS, RendererResult::Failure);
 			return RendererResult::Success;
 		}
 
@@ -470,7 +746,7 @@ namespace Re
 			createInfo.subresourceRange.baseArrayLayer = 0;
 			createInfo.subresourceRange.layerCount = 1;
 
-			CHECK_RESULT(vkCreateImageView(_device._logical, &createInfo, nullptr, outView), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateImageView(_device._logical, &createInfo, nullptr, outView), VK_SUCCESS, RendererResult::Failure)
 			return RendererResult::Success;
 		}
 
@@ -483,17 +759,17 @@ namespace Re
 			createInfo.codeSize = raw.size();
 			createInfo.pCode = reinterpret_cast<const u32*>(raw.data());
 
-			CHECK_RESULT(vkCreateShaderModule(_device._logical, &createInfo, nullptr, outModule), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateShaderModule(_device._logical, &createInfo, nullptr, outModule), VK_SUCCESS, RendererResult::Failure)
 			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::CreateIndexBuffer(boost::container::vector<u32>& indices, VkBuffer* outBuffer)
 		{
-			VkDeviceSize size = sizeof(u32) * indices.size();
+			if (!outBuffer) return RendererResult::Failure;
 
 			// Create the actual index buffer located in the GPU.
-			CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-									  outBuffer), RendererResult::Success, RendererResult::Failure);
+			VkDeviceSize size = sizeof(u32) * indices.size();
+			CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, outBuffer), RendererResult::Success, RendererResult::Failure)
 
 			// Create index information to be able to transfer.
 			IndexInfo indexInfo = {};
@@ -503,36 +779,15 @@ namespace Re
 
 			_indexBuffersToTransfer.emplace_back(indexInfo);
 			return RendererResult::Success;
-
-			//// Create a temporary buffer to "stage" index data before GPU transfer.
-			//VkBuffer stagingBuffer;
-			//VkDeviceMemory stagingMemory;
-			//CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			//						  &stagingBuffer, &stagingMemory), RendererResult::Success, RendererResult::Failure);
-
-			//// Map pointer to staging buffer location and transfer data.
-			//void* data;
-			//CHECK_RESULT(vkMapMemory(_device._logical, stagingMemory, 0, size, 0, &data), VK_SUCCESS, RendererResult::Failure);
-			//Memory::NMemCpy(data, indices.data(), (usize)size);
-			//vkUnmapMemory(_device._logical, stagingMemory);
-
-			//// Create the actual index buffer located in the GPU and copy data over to it.
-			//CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			//						  outBuffer, outMemory), RendererResult::Success, RendererResult::Failure);
-			//CHECK_RESULT(CopyBuffer(stagingBuffer, *outBuffer, size), RendererResult::Success, RendererResult::Failure);
-
-			//// Cleanup temporary staging buffers and memory.
-			//vkDestroyBuffer(_device._logical, stagingBuffer, nullptr);
-			//vkFreeMemory(_device._logical, stagingMemory, nullptr);
 		}
 
 		RendererResult Renderer::CreateVertexBuffer(boost::container::vector<Vertex>& vertices, VkBuffer* outBuffer)
 		{
-			VkDeviceSize size = sizeof(Vertex) * vertices.size();
+			if (!outBuffer) return RendererResult::Failure;
 
 			// Create the actual vertex buffer located in the GPU.
-			CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-									  outBuffer), RendererResult::Success, RendererResult::Failure);
+			VkDeviceSize size = sizeof(Vertex) * vertices.size();
+			CHECK_RESULT(CreateBuffer(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, outBuffer), RendererResult::Success, RendererResult::Failure)
 
 			// Create vertex information to be able to transfer.
 			VertexInfo vertexInfo = {};
@@ -567,54 +822,47 @@ namespace Re
 			}
 		}
 
-		RendererResult Renderer::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) const
+		void Renderer::CleanStageBuffers()
 		{
-			// Create command buffer for transfer operations.
-			VkCommandBuffer transferBuffer;
-			VkCommandBufferAllocateInfo allocateInfo = {};
-			allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocateInfo.commandPool = _transferPool;
-			allocateInfo.commandBufferCount = 1;
+			if (_indexStagingBuffer && _indexStagingMemory)
+			{
+				vkDestroyBuffer(_device._logical, _indexStagingBuffer, nullptr);
+				vkFreeMemory(_device._logical, _indexStagingMemory, nullptr);
+			}
 
-			CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, &transferBuffer), VK_SUCCESS, RendererResult::Failure);
-
-			// Begin command buffer as optimized for one-time usage.
-			VkCommandBufferBeginInfo beginInfo = {};
-			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-			// Configure region of buffers to copy from.
-			VkBufferCopy region = {};
-			region.srcOffset = 0;
-			region.dstOffset = 0;
-			region.size = size;
-
-			// Start recording commands for the transfer buffer.
-			CHECK_RESULT(vkBeginCommandBuffer(transferBuffer, &beginInfo), VK_SUCCESS, RendererResult::Failure);
-
-			vkCmdCopyBuffer(transferBuffer, src, dst, 1, &region);
-
-			CHECK_RESULT(vkEndCommandBuffer(transferBuffer), VK_SUCCESS, RendererResult::Failure);
-
-			// Configure queue submission information.
-			VkSubmitInfo submitInfo = {};
-			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &transferBuffer;
-
-			// Submit command to queue and wait until it finishes.
-			CHECK_RESULT(vkQueueSubmit(_transferQueue, 1, &submitInfo, VK_NULL_HANDLE), VK_SUCCESS, RendererResult::Failure);
-			CHECK_RESULT(vkQueueWaitIdle(_transferQueue), VK_SUCCESS, RendererResult::Failure);
-
-			// Free temporary command buffer.
-			vkFreeCommandBuffers(_device._logical, _transferPool, 1, &transferBuffer);
-
-			return RendererResult::Success;
+			if (_vertexStagingBuffer && _vertexStagingMemory)
+			{
+				vkDestroyBuffer(_device._logical, _vertexStagingBuffer, nullptr);
+				vkFreeMemory(_device._logical, _vertexStagingMemory, nullptr);
+			}
 		}
 
 		RendererResult Renderer::ExecuteTransferOperations()
 		{
+			// Calculate proper memory size and type for index and vertex buffers.
+			//usize indexAllocationSize = 0, vertexAllocationSize = 0;
+			//u32 indexAllowedTypes = 0, vertexAllowedTypes = 0;
+			//for (auto& entity : _entitiesToTransfer)
+			//{
+			//	auto& renderInfo = entity.second;
+			//	VkMemoryRequirements indexMemoryRequirements;
+			//	VkMemoryRequirements vertexMemoryRequirements;
+
+			//	// Get buffer memory requirements.
+			//	vkGetBufferMemoryRequirements(_device._logical, renderInfo._indexBuffer, &indexMemoryRequirements);
+			//	vkGetBufferMemoryRequirements(_device._logical, renderInfo._vertexBuffer, &vertexMemoryRequirements);
+
+			//	// Update size of individual buffer.
+			//	renderInfo._indexSize = indexMemoryRequirements.size;
+			//	renderInfo._vertexSize = vertexMemoryRequirements.size;
+
+			//	// Update general values for big chunk of memory.
+			//	indexAllocationSize += indexMemoryRequirements.size;
+			//	indexAllowedTypes |= indexMemoryRequirements.memoryTypeBits;
+			//	vertexAllocationSize += vertexMemoryRequirements.size;
+			//	vertexAllowedTypes |= vertexMemoryRequirements.memoryTypeBits;
+			//}
+
 			// Calculate proper memory size and type for vertex buffer.
 			usize vertexAllocationSize = 0;
 			u32 vertexAllowedTypes = 0;
@@ -651,11 +899,10 @@ namespace Re
 
 			// Create staging buffers, allocate memory and copy data over to them.
 			u32 i = sizeof(Vertex);
-			VkBuffer vertexStagingBuffer, indexStagingBuffer;
-			VkDeviceMemory vertexStagingMemory, indexStagingMemory;
-			CHECK_RESULT(StageVertexBuffer(vertexAllocationSize, &vertexStagingBuffer, &vertexStagingMemory), RendererResult::Success, RendererResult::Failure);
-			CHECK_RESULT(StageIndexBuffer(indexAllocationSize, &indexStagingBuffer, &indexStagingMemory), RendererResult::Success, RendererResult::Failure);
-
+			//CleanStageBuffers();
+			CHECK_RESULT(StageVertexBuffer(vertexAllocationSize, &_vertexStagingBuffer, &_vertexStagingMemory), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(StageIndexBuffer(indexAllocationSize, &_indexStagingBuffer, &_indexStagingMemory), RendererResult::Success, RendererResult::Failure)
+			
 			// Allocate memory to real vertex buffer.
 			VkDeviceMemory vertexMemory;
 			VkMemoryAllocateInfo vertexAllocateInfo = {};
@@ -663,18 +910,8 @@ namespace Re
 			vertexAllocateInfo.allocationSize = vertexAllocationSize;
 			vertexAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(vertexAllowedTypes, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-			CHECK_RESULT(vkAllocateMemory(_device._logical, &vertexAllocateInfo, nullptr, &vertexMemory), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkAllocateMemory(_device._logical, &vertexAllocateInfo, nullptr, &vertexMemory), VK_SUCCESS, RendererResult::Failure)
 			
-			// Bind memory to real vertex buffer.
-			VkDeviceSize vertexOffset = 0;
-			for (const auto& vInfo : _vertexBuffersToTransfer)
-			{
-				CHECK_RESULT(vkBindBufferMemory(_device._logical, vInfo._buffer, vertexMemory, vertexOffset), VK_SUCCESS, RendererResult::Failure);
-				
-				_bufferMemory.insert(boost::bimap<VkBuffer, VkDeviceMemory>::value_type(vInfo._buffer, vertexMemory));
-				vertexOffset += vInfo._size;
-			}
-
 			// Allocate memory to real index buffer.
 			VkDeviceMemory indexMemory;
 			VkMemoryAllocateInfo indexAllocateInfo = {};
@@ -682,35 +919,65 @@ namespace Re
 			indexAllocateInfo.allocationSize = indexAllocationSize;
 			indexAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(indexAllowedTypes, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-			CHECK_RESULT(vkAllocateMemory(_device._logical, &indexAllocateInfo, nullptr, &indexMemory), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkAllocateMemory(_device._logical, &indexAllocateInfo, nullptr, &indexMemory), VK_SUCCESS, RendererResult::Failure)
+
+			// Bind memory to real buffers.
+			//VkDeviceSize indexOffset = 0, vertexOffset = 0;
+			//for (const auto& entity : _entitiesToTransfer)
+			//{
+			//	const auto& renderInfo = entity.second;
+
+			//	// Bind memory to index buffer.
+			//	CHECK_RESULT(vkBindBufferMemory(_device._logical, renderInfo._indexBuffer, indexMemory, indexOffset), VK_SUCCESS, RendererResult::Failure)
+
+			//	// Store index memory into bimap for tracking and increase offset.
+			//	_bufferMemory.insert(boost::bimap<VkBuffer, VkDeviceMemory>::value_type(renderInfo._indexBuffer, indexMemory));
+			//	indexOffset += renderInfo._indexSize;
+
+			//	// Bind memory to vertex buffer.
+			//	CHECK_RESULT(vkBindBufferMemory(_device._logical, renderInfo._vertexBuffer, vertexMemory, vertexOffset), VK_SUCCESS, RendererResult::Failure)
+
+			//	// Store vertex memory into bimap for tracking and increase offset.
+			//	_bufferMemory.insert(boost::bimap<VkBuffer, VkDeviceMemory>::value_type(renderInfo._vertexBuffer, vertexMemory));
+			//	vertexOffset += renderInfo._vertexSize;
+			//}
+
+			// Bind memory to real vertex buffer.
+			VkDeviceSize vertexOffset = 0;
+			for (const auto& vInfo : _vertexBuffersToTransfer)
+			{
+				CHECK_RESULT(vkBindBufferMemory(_device._logical, vInfo._buffer, vertexMemory, vertexOffset), VK_SUCCESS, RendererResult::Failure)
+				
+				_bufferMemory.insert(boost::bimap<VkBuffer, VkDeviceMemory>::value_type(vInfo._buffer, vertexMemory));
+				vertexOffset += vInfo._size;
+			}
 
 			// Bind memory to real index buffer.
 			VkDeviceSize indexOffset = 0;
 			for (const auto& iInfo : _indexBuffersToTransfer)
 			{
-				CHECK_RESULT(vkBindBufferMemory(_device._logical, iInfo._buffer, indexMemory, indexOffset), VK_SUCCESS, RendererResult::Failure);
+				CHECK_RESULT(vkBindBufferMemory(_device._logical, iInfo._buffer, indexMemory, indexOffset), VK_SUCCESS, RendererResult::Failure)
 				
 				_bufferMemory.insert(boost::bimap<VkBuffer, VkDeviceMemory>::value_type(iInfo._buffer, indexMemory));
 				indexOffset += iInfo._size;
 			}
 
-			// Create command buffer for transfer operations.
-			VkCommandBuffer transferBuffer;
-			VkCommandBufferAllocateInfo allocateInfo = {};
-			allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocateInfo.commandPool = _transferPool;
-			allocateInfo.commandBufferCount = 1;
-
-			CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, &transferBuffer), VK_SUCCESS, RendererResult::Failure);
-
 			// Begin command buffer as optimized for one-time usage.
 			VkCommandBufferBeginInfo beginInfo = {};
 			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 			// Start recording commands for the transfer buffer.
-			CHECK_RESULT(vkBeginCommandBuffer(transferBuffer, &beginInfo), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkResetCommandBuffer(_transferBuffer, 0), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkBeginCommandBuffer(_transferBuffer, &beginInfo), VK_SUCCESS, RendererResult::Failure)
+
+			// Copy data from staging buffers to real buffers.
+			//VkDeviceSize indexSrcOffset = 0, vertexSrcOffset = 0;
+			//for (const auto& entity : _entitiesToTransfer)
+			//{
+			//	const auto& renderInfo = entity.second;
+			//	VkDeviceSize iSize = renderInfo._indexCount * sizeof(u32);
+			//	VkDeviceSize vSize = renderInfo._vertexCount * sizeof(Vertex);
+			//}
 
 			VkDeviceSize vertexSrcOffset = 0;
 			for (const auto& vInfo : _vertexBuffersToTransfer)
@@ -723,7 +990,7 @@ namespace Re
 				region.dstOffset = 0;
 				region.size = size;
 
-				vkCmdCopyBuffer(transferBuffer, vertexStagingBuffer, vInfo._buffer, 1, &region);
+				vkCmdCopyBuffer(_transferBuffer, _vertexStagingBuffer, vInfo._buffer, 1, &region);
 				vertexSrcOffset += vInfo._size;
 			}
 
@@ -738,33 +1005,43 @@ namespace Re
 				region.dstOffset = 0;
 				region.size = size;
 
-				vkCmdCopyBuffer(transferBuffer, indexStagingBuffer, iInfo._buffer, 1, &region);
+				vkCmdCopyBuffer(_transferBuffer, _indexStagingBuffer, iInfo._buffer, 1, &region);
 				indexSrcOffset += iInfo._size;
 			}
 
-			CHECK_RESULT(vkEndCommandBuffer(transferBuffer), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkEndCommandBuffer(_transferBuffer), VK_SUCCESS, RendererResult::Failure)
 
 			// Configure queue submission information.
 			VkSubmitInfo submitInfo = {};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &transferBuffer;
+			submitInfo.pCommandBuffers = &_transferBuffer;
+
+			// Load next inactive command buffer.
+			usize current = _currentBuffer.load();
 
 			// Submit command to queue and wait until it finishes.
-			CHECK_RESULT(vkQueueSubmit(_transferQueue, 1, &submitInfo, VK_NULL_HANDLE), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkQueueSubmit(_transferQueue, 1, &submitInfo, nullptr), VK_SUCCESS, RendererResult::Failure)
+
+			// TODO: In the future, record secondary command buffers for static objects.
+			
+			// Re-record the commands after performing transfering operations.
+			// RecordCommands(inactive, 0, _commandBuffers[inactive].size(), true);
+			UpdateVertexUniformBuffers(current);
+			UpdateFragmentUniformBuffers(current);
+			UpdateFragmentDynamicUniformBuffers(current);
+
+			// Wait until the transfer operations are completed before proceeding.
 			CHECK_RESULT(vkQueueWaitIdle(_transferQueue), VK_SUCCESS, RendererResult::Failure);
 
-			// Free temporary command buffer.
-			vkFreeCommandBuffers(_device._logical, _transferPool, 1, &transferBuffer);
+			// Add new entities to renderable entities.
+			_entitiesToRender.insert_unique(_entitiesToTransfer.begin(), _entitiesToTransfer.end());
 
-			// Cleanup temporary staging buffers and memory.
-			vkDestroyBuffer(_device._logical, indexStagingBuffer, nullptr);
-			vkFreeMemory(_device._logical, indexStagingMemory, nullptr);
-			vkDestroyBuffer(_device._logical, vertexStagingBuffer, nullptr);
-			vkFreeMemory(_device._logical, vertexStagingMemory, nullptr);
-
+			// Cleanup transfered buffers and entities.
+			CleanStageBuffers();
 			_vertexBuffersToTransfer.clear();
 			_indexBuffersToTransfer.clear();
+			_entitiesToTransfer.clear();
 
 			return RendererResult::Success;
 		}
@@ -772,25 +1049,12 @@ namespace Re
 		RendererResult Renderer::StageIndexBuffer(VkDeviceSize bufferSize, VkBuffer* stagingBuffer, VkDeviceMemory* stagingMemory)
 		{
 			// Create staging buffer.
-			CHECK_RESULT(CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-									  stagingBuffer), RendererResult::Success, RendererResult::Failure);
-
-			// Get buffer memory requirements.
-			VkMemoryRequirements stagingRequirements;
-			vkGetBufferMemoryRequirements(_device._logical, *stagingBuffer, &stagingRequirements);
-
-			// Allocate memory to staging buffer.
-			VkMemoryAllocateInfo stagingAllocateInfo = {};
-			stagingAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			stagingAllocateInfo.allocationSize = stagingRequirements.size;
-			stagingAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(stagingRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-			CHECK_RESULT(vkAllocateMemory(_device._logical, &stagingAllocateInfo, nullptr, stagingMemory), VK_SUCCESS, RendererResult::Failure);
-			CHECK_RESULT(vkBindBufferMemory(_device._logical, *stagingBuffer, *stagingMemory, 0), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(AllocateBuffer(*stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingMemory), RendererResult::Success, RendererResult::Failure)
 
 			// Map pointer to staging buffer location and transfer data.
 			void* data;
-			CHECK_RESULT(vkMapMemory(_device._logical, *stagingMemory, 0, stagingRequirements.size, 0, &data), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkMapMemory(_device._logical, *stagingMemory, 0, bufferSize, 0, &data), VK_SUCCESS, RendererResult::Failure)
 
 			VkDeviceSize stagingOffset = 0;
 			for (const auto& iInfo : _indexBuffersToTransfer)
@@ -806,25 +1070,12 @@ namespace Re
 		RendererResult Renderer::StageVertexBuffer(VkDeviceSize bufferSize, VkBuffer* stagingBuffer, VkDeviceMemory* stagingMemory)
 		{
 			// Create staging buffer.
-			CHECK_RESULT(CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-									  stagingBuffer), RendererResult::Success, RendererResult::Failure);
-
-			// Get buffer memory requirements.
-			VkMemoryRequirements stagingRequirements;
-			vkGetBufferMemoryRequirements(_device._logical, *stagingBuffer, &stagingRequirements);
-
-			// Allocate memory to staging buffer.
-			VkMemoryAllocateInfo stagingAllocateInfo = {};
-			stagingAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			stagingAllocateInfo.allocationSize = stagingRequirements.size;
-			stagingAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(stagingRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-			CHECK_RESULT(vkAllocateMemory(_device._logical, &stagingAllocateInfo, nullptr, stagingMemory), VK_SUCCESS, RendererResult::Failure);
-			CHECK_RESULT(vkBindBufferMemory(_device._logical, *stagingBuffer, *stagingMemory, 0), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(AllocateBuffer(*stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingMemory), RendererResult::Success, RendererResult::Failure)
 
 			// Map pointer to staging buffer location and transfer data.
 			void* data;
-			CHECK_RESULT(vkMapMemory(_device._logical, *stagingMemory, 0, stagingRequirements.size, 0, &data), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkMapMemory(_device._logical, *stagingMemory, 0, bufferSize, 0, &data), VK_SUCCESS, RendererResult::Failure)
 
 			VkDeviceSize stagingOffset = 0;
 			for (const auto& vInfo : _vertexBuffersToTransfer)
@@ -874,6 +1125,29 @@ namespace Re
 			return VK_PRESENT_MODE_FIFO_KHR;
 		}
 
+		VkFormat Renderer::ChooseBestSupportedFormat(const boost::container::vector<VkFormat>& formats, VkImageTiling tiling, VkFormatFeatureFlags features) const
+		{
+			// Go through options and find a compatible match.
+			for (auto format : formats)
+			{
+				// Retrieve the properties of the format in the physical device.
+				VkFormatProperties properties;
+				vkGetPhysicalDeviceFormatProperties(_device._physical, format, &properties);
+
+				if (tiling == VK_IMAGE_TILING_LINEAR && (properties.linearTilingFeatures & features) == features)
+				{
+					return format;
+				}
+				else if (tiling == VK_IMAGE_TILING_OPTIMAL && (properties.optimalTilingFeatures & features) == features)
+				{
+					return format;
+				}
+			}
+
+			// If no compatible format is found, return undefined.
+			return VK_FORMAT_UNDEFINED;
+		}
+
 		VkExtent2D Renderer::ChooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities) const
 		{
 			// If is not varying, just return the current extent of the window.
@@ -913,7 +1187,7 @@ namespace Re
 			createInfo.enabledLayerCount = static_cast<uint32_t>(instanceLayers.size());
 			createInfo.ppEnabledLayerNames = instanceLayers.data();
 
-			CHECK_RESULT(vkCreateInstance(&createInfo, nullptr, &_instance), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateInstance(&createInfo, nullptr, &_instance), VK_SUCCESS, RendererResult::Failure)
 			return RendererResult::Success;
 		}
 
@@ -958,7 +1232,7 @@ namespace Re
 			createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 			createInfo.pEnabledFeatures = &features;
 			
-			CHECK_RESULT(vkCreateDevice(_device._physical, &createInfo, nullptr, &_device._logical), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateDevice(_device._physical, &createInfo, nullptr, &_device._logical), VK_SUCCESS, RendererResult::Failure)
 
 			// Retrieve the queues created by the logical device and store handles.
 			vkGetDeviceQueue(_device._logical, familyInfo._graphicsFamily, 0, &_graphicsQueue);
@@ -1026,7 +1300,7 @@ namespace Re
 				createInfo.pQueueFamilyIndices = nullptr;
 			}
 			
-			CHECK_RESULT(vkCreateSwapchainKHR(_device._logical, &createInfo, nullptr, &_swapchain), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateSwapchainKHR(_device._logical, &createInfo, nullptr, &_swapchain), VK_SUCCESS, RendererResult::Failure)
 
 			// Store format and extent for posterior usage.
 			_swapchainFormat = format.format;
@@ -1043,7 +1317,7 @@ namespace Re
 			{
 				SwapchainImage swapchainImage = {};
 				swapchainImage._raw = img;
-				CHECK_RESULT(CreateImageView(img, _swapchainFormat, VK_IMAGE_ASPECT_COLOR_BIT, &swapchainImage._view), RendererResult::Success, RendererResult::Failure);
+				CHECK_RESULT(CreateImageView(img, _swapchainFormat, VK_IMAGE_ASPECT_COLOR_BIT, &swapchainImage._view), RendererResult::Success, RendererResult::Failure)
 
 				// Add to the list of swapchain images.
 				_swapchainImages.emplace_back(swapchainImage);
@@ -1065,16 +1339,33 @@ namespace Re
 			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-			// Attachment reference for subpass.
+			// Depth attachment of the render pass.
+			VkAttachmentDescription depthAttachment = {};
+			depthAttachment.format = _depthFormat;
+			depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+			depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+			// Attachment reference for color attachment of the subpass.
 			VkAttachmentReference colorReference = {};
 			colorReference.attachment = 0;
 			colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			// Attachment reference for depth attachment of the subpass.
+			VkAttachmentReference depthReference = {};
+			depthReference.attachment = 1;
+			depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
 			// Subpass description for this render pass.
 			VkSubpassDescription subpass = {};
 			subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 			subpass.colorAttachmentCount = 1;
 			subpass.pColorAttachments = &colorReference;
+			subpass.pDepthStencilAttachment = &depthReference;
 
 			// Need to determine when layout transition occurs through subpass dependencies.
 			boost::container::vector<VkSubpassDependency> subpassDependencies(2);
@@ -1097,30 +1388,91 @@ namespace Re
 			subpassDependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 			subpassDependencies[1].dependencyFlags = 0;
 
+			// Assemble vector of attachments.
+			boost::array<VkAttachmentDescription, 2> attachments = { 
+				colorAttachment, 
+				depthAttachment 
+			};
+
 			// Render pass creation information.
 			VkRenderPassCreateInfo renderCreateInfo = {};
 			renderCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-			renderCreateInfo.attachmentCount = 1;
-			renderCreateInfo.pAttachments = &colorAttachment;
+			renderCreateInfo.attachmentCount = static_cast<u32>(attachments.size());
+			renderCreateInfo.pAttachments = attachments.data();
 			renderCreateInfo.subpassCount = 1;
 			renderCreateInfo.pSubpasses = &subpass;
 			renderCreateInfo.dependencyCount = static_cast<u32>(subpassDependencies.size());
 			renderCreateInfo.pDependencies = subpassDependencies.data();
 			
-			CHECK_RESULT(vkCreateRenderPass(_device._logical, &renderCreateInfo, nullptr, &_renderPass), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateRenderPass(_device._logical, &renderCreateInfo, nullptr, &_renderPass), VK_SUCCESS, RendererResult::Failure)
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateDescriptorSetLayout()
+		{
+			// Descriptor set layout bindings information of the vertex uniform.
+			VkDescriptorSetLayoutBinding vertexUniformLayoutBinding = {};
+			vertexUniformLayoutBinding.binding = 0;
+			vertexUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			vertexUniformLayoutBinding.descriptorCount = 1;
+			vertexUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+			vertexUniformLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Descriptor set layout bindings information of the fragment uniform.
+			VkDescriptorSetLayoutBinding fragmentUniformLayoutBinding = {};
+			fragmentUniformLayoutBinding.binding = 1;
+			fragmentUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			fragmentUniformLayoutBinding.descriptorCount = 1;
+			fragmentUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			fragmentUniformLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Descriptor set layout bindings information of the fragment dynamic uniform.
+			VkDescriptorSetLayoutBinding fragmentDynamicUniformLayoutBinding = {};
+			fragmentDynamicUniformLayoutBinding.binding = 2;
+			fragmentDynamicUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+			fragmentDynamicUniformLayoutBinding.descriptorCount = 1;
+			fragmentDynamicUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			fragmentDynamicUniformLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Assemble the binding informations into an array.
+			boost::array<VkDescriptorSetLayoutBinding, 3> layoutBindings = {
+				vertexUniformLayoutBinding, fragmentUniformLayoutBinding, fragmentDynamicUniformLayoutBinding
+			};
+
+			// Descriptor set layout creation information.
+			VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {};
+			layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			layoutCreateInfo.bindingCount = static_cast<u32>(layoutBindings.size());
+			layoutCreateInfo.pBindings = layoutBindings.data();
+
+			// Create descriptor set layout with the logical device.
+			CHECK_RESULT(vkCreateDescriptorSetLayout(_device._logical, &layoutCreateInfo, nullptr, &_descriptorSetLayout), VK_SUCCESS, RendererResult::Failure)
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreatePushConstantRanges()
+		{
+			// Resize the push constant range vector to hold all constants.
+			_pushConstantRanges.resize(1);
+
+			// Configure the values for the vertex push constant.
+			_pushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+			_pushConstantRanges[0].offset = 0;
+			_pushConstantRanges[0].size = sizeof(VertexPush);
+
 			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::CreateGraphicsPipeline()
 		{
 			boost::container::vector<char> fragmentShaderRaw, vertexShaderRaw;
-			CHECK_RESULT(ReadShader("Shaders/vert.spv", &vertexShaderRaw), RendererResult::Success, RendererResult::Failure);
-			CHECK_RESULT(ReadShader("Shaders/frag.spv", &fragmentShaderRaw), RendererResult::Success, RendererResult::Failure);
+			CHECK_RESULT(ReadShader("Shaders/vert.spv", &vertexShaderRaw), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(ReadShader("Shaders/frag.spv", &fragmentShaderRaw), RendererResult::Success, RendererResult::Failure)
 
 			// Create shader modules.
 			VkShaderModule fragmentShader, vertexShader;
-			CHECK_RESULT(CreateShaderModule(vertexShaderRaw, &vertexShader), RendererResult::Success, RendererResult::Failure);
-			CHECK_RESULT(CreateShaderModule(fragmentShaderRaw, &fragmentShader), RendererResult::Success, RendererResult::Failure);
+			CHECK_RESULT(CreateShaderModule(vertexShaderRaw, &vertexShader), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(CreateShaderModule(fragmentShaderRaw, &fragmentShader), RendererResult::Success, RendererResult::Failure)
 
 			// Vertex stage creation information.
 			VkPipelineShaderStageCreateInfo vertexCreateInfo = {};
@@ -1152,7 +1504,7 @@ namespace Re
 			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 			// How the data for an attribute is defined within the vertex.
-			boost::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+			boost::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
 
 			// Position attribute.
 			attributeDescriptions[0].binding = 0;
@@ -1165,6 +1517,12 @@ namespace Re
 			attributeDescriptions[1].location = 1;
 			attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 			attributeDescriptions[1].offset = offsetof(Vertex, _color);
+
+			// Normal attribute.
+			attributeDescriptions[2].binding = 0;
+			attributeDescriptions[2].location = 2;
+			attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+			attributeDescriptions[2].offset = offsetof(Vertex, _normal);
 
 			// Vertex input stage.
 			VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
@@ -1221,7 +1579,7 @@ namespace Re
 			rasterCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
 			rasterCreateInfo.lineWidth = 1.0f;
 			rasterCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-			rasterCreateInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+			rasterCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 			rasterCreateInfo.depthBiasEnable = VK_FALSE;
 
 			#pragma endregion
@@ -1264,17 +1622,28 @@ namespace Re
 			// Pipeline layout stage creation information.
 			VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 			layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			layoutCreateInfo.setLayoutCount = 0;
-			layoutCreateInfo.pSetLayouts = nullptr;
-			layoutCreateInfo.pushConstantRangeCount = 0;
-			layoutCreateInfo.pPushConstantRanges = nullptr;
+			layoutCreateInfo.setLayoutCount = 1;
+			layoutCreateInfo.pSetLayouts = &_descriptorSetLayout;
+			layoutCreateInfo.pushConstantRangeCount = static_cast<u32>(_pushConstantRanges.size());
+			layoutCreateInfo.pPushConstantRanges = _pushConstantRanges.data();
 
 			// Create pipeline layout.
-			CHECK_RESULT(vkCreatePipelineLayout(_device._logical, &layoutCreateInfo, nullptr, &_pipelineLayout), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreatePipelineLayout(_device._logical, &layoutCreateInfo, nullptr, &_pipelineLayout), VK_SUCCESS, RendererResult::Failure)
 			
 			#pragma endregion
 
+			#pragma region Depth Stencil Stage
+
 			// TODO: Setup depth stencil testing
+			VkPipelineDepthStencilStateCreateInfo depthCreateInfo = {};
+			depthCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+			depthCreateInfo.depthTestEnable = VK_TRUE;
+			depthCreateInfo.depthWriteEnable = VK_TRUE;
+			depthCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS;
+			depthCreateInfo.depthBoundsTestEnable = VK_FALSE;
+			depthCreateInfo.stencilTestEnable = VK_FALSE;
+
+			#pragma endregion
 
 			// Create graphics pipeline information.
 			VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
@@ -1288,7 +1657,7 @@ namespace Re
 			pipelineCreateInfo.pRasterizationState = &rasterCreateInfo;
 			pipelineCreateInfo.pMultisampleState = &multisampleCreateInfo;
 			pipelineCreateInfo.pColorBlendState = &blendCreateInfo;
-			pipelineCreateInfo.pDepthStencilState = nullptr;
+			pipelineCreateInfo.pDepthStencilState = &depthCreateInfo;
 			pipelineCreateInfo.layout = _pipelineLayout;
 			pipelineCreateInfo.renderPass = _renderPass;							// Render pass it is compatible with.
 			pipelineCreateInfo.subpass = 0;											// Subpass of the render pass that it will use.
@@ -1297,7 +1666,7 @@ namespace Re
 			pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
 			pipelineCreateInfo.basePipelineIndex = -1;
 
-			CHECK_RESULT(vkCreateGraphicsPipelines(_device._logical, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &_graphicsPipeline), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateGraphicsPipelines(_device._logical, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &_graphicsPipeline), VK_SUCCESS, RendererResult::Failure)
 			
 			// Destroy shader modules (no longer needed after creating pipeline).
 			vkDestroyShaderModule(_device._logical, fragmentShader, nullptr);
@@ -1306,13 +1675,29 @@ namespace Re
 			return RendererResult::Success;
 		}
 
+		RendererResult Renderer::CreateDepthBufferImage()
+		{
+			_depthFormat = ChooseBestSupportedFormat(
+				{ VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT },
+				VK_IMAGE_TILING_OPTIMAL,
+				VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
+			);
+
+			// Create and allocate image and view, using the appropriate depth stencil format.
+			CHECK_RESULT(CreateImage(_swapchainExtent.width, _swapchainExtent.height, _depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, &_depthBufferImage), RendererResult::Success, RendererResult::Failure);
+			CHECK_RESULT(AllocateImage(_depthBufferImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_depthBufferMemory), RendererResult::Success, RendererResult::Failure);
+			CHECK_RESULT(CreateImageView(_depthBufferImage, _depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, &_depthBufferImageView), RendererResult::Success, RendererResult::Failure);
+			return RendererResult::Success;
+		}
+
 		RendererResult Renderer::CreateFramebuffers()
 		{
 			_swapchainFramebuffers.resize(_swapchainImages.size());
 			for (usize i = 0; i < _swapchainFramebuffers.size(); ++i)
 			{
-				boost::array<VkImageView, 1> attachments = {
+				boost::array<VkImageView, 2> attachments = {
 					_swapchainImages[i]._view,
+					_depthBufferImageView
 				};
 
 				VkFramebufferCreateInfo createInfo = {};
@@ -1324,7 +1709,7 @@ namespace Re
 				createInfo.height = _swapchainExtent.height;
 				createInfo.layers = 1;
 
-				CHECK_RESULT(vkCreateFramebuffer(_device._logical, &createInfo, nullptr, &_swapchainFramebuffers[i]), VK_SUCCESS, RendererResult::Failure);
+				CHECK_RESULT(vkCreateFramebuffer(_device._logical, &createInfo, nullptr, &_swapchainFramebuffers[i]), VK_SUCCESS, RendererResult::Failure)
 			}
 
 			return RendererResult::Success;
@@ -1340,7 +1725,10 @@ namespace Re
 			createInfo.queueFamilyIndex = familyInfo._graphicsFamily;
 			createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-			CHECK_RESULT(vkCreateCommandPool(_device._logical, &createInfo, nullptr, &_graphicsPool), VK_SUCCESS, RendererResult::Failure);
+			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
+			{
+				CHECK_RESULT(vkCreateCommandPool(_device._logical, &createInfo, nullptr, &_graphicsPools[i]), VK_SUCCESS, RendererResult::Failure)
+			}
 
 			// Create command pool for transfer operations, if required.
 			if (familyInfo.HasDedicatedTransfer())
@@ -1348,13 +1736,17 @@ namespace Re
 				VkCommandPoolCreateInfo transferCreateInfo = {};
 				transferCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 				transferCreateInfo.queueFamilyIndex = familyInfo._transferFamily;
-				transferCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+				transferCreateInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-				CHECK_RESULT(vkCreateCommandPool(_device._logical, &transferCreateInfo, nullptr, &_transferPool), VK_SUCCESS, RendererResult::Failure);
+				CHECK_RESULT(vkCreateCommandPool(_device._logical, &transferCreateInfo, nullptr, &_transferPool), VK_SUCCESS, RendererResult::Failure)
 			}
 			else
 			{
-				_transferPool = _graphicsPool;
+				// Update flags for transfer operations.
+				createInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+
+				CHECK_RESULT(vkCreateCommandPool(_device._logical, &createInfo, nullptr, &_transferPool), VK_SUCCESS, RendererResult::Failure);
+				//_transferPool = _graphicsPools[0];
 			}
 
 			return RendererResult::Success;
@@ -1372,10 +1764,168 @@ namespace Re
 				_commandBuffers[i].resize(_swapchainFramebuffers.size());
 
 				// Configure allocation for specific command buffer set.
-				allocateInfo.commandPool = _graphicsPool;
+				allocateInfo.commandPool = _graphicsPools[i];
 				allocateInfo.commandBufferCount = static_cast<u32>(_commandBuffers[i].size());
 
-				CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, _commandBuffers[i].data()), VK_SUCCESS, RendererResult::Failure);
+				CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, _commandBuffers[i].data()), VK_SUCCESS, RendererResult::Failure)
+			}
+
+			// Create command buffer for transfer operations.
+			allocateInfo.commandPool = _transferPool;
+			allocateInfo.commandBufferCount = 1;
+			CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, &_transferBuffer), VK_SUCCESS, RendererResult::Failure)
+
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateUniformBuffers()
+		{
+			VkDeviceSize vertexBufferSize = sizeof(VertexUniform);
+			VkDeviceSize fragmentBufferSize = sizeof(FragmentUniform);
+			VkDeviceSize fragmentDynamicBufferSize = GetUniformAlignment(sizeof(FragmentDynamicUniform)) * MAX_ENTITIES;
+
+			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
+			{
+				// Create one vertex uniform buffer for each swapchain image.
+				_vertexUniformBuffers[i].resize(_swapchainImages.size());
+				_vertexUniformBuffersMemory[i].resize(_swapchainImages.size());
+				for (usize j = 0; j < _vertexUniformBuffers[i].size(); ++j)
+				{
+					CHECK_RESULT(CreateBuffer(vertexBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_vertexUniformBuffers[i][j]), RendererResult::Success, RendererResult::Failure)
+					CHECK_RESULT(AllocateBuffer(_vertexUniformBuffers[i][j], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_vertexUniformBuffersMemory[i][j]), RendererResult::Success, RendererResult::Failure)
+				}
+
+				// Create one fragment uniform buffer for each swapchain image.
+				_fragmentUniformBuffers[i].resize(_swapchainImages.size());
+				_fragmentUniformBuffersMemory[i].resize(_swapchainImages.size());
+				for (usize j = 0; j < _fragmentUniformBuffers[i].size(); ++j)
+				{
+					CHECK_RESULT(CreateBuffer(fragmentBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_fragmentUniformBuffers[i][j]), RendererResult::Success, RendererResult::Failure)
+					CHECK_RESULT(AllocateBuffer(_fragmentUniformBuffers[i][j], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_fragmentUniformBuffersMemory[i][j]), RendererResult::Success, RendererResult::Failure)
+				}
+
+				// Create one fragment dynamic uniform buffer for each swapchain image.
+				_fragmentDynamicUniformBuffers[i].resize(_swapchainImages.size());
+				_fragmentDynamicUniformBuffersMemory[i].resize(_swapchainImages.size());
+				for (usize j = 0; j < _fragmentDynamicUniformBuffers[i].size(); ++j)
+				{
+					CHECK_RESULT(CreateBuffer(fragmentDynamicBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_fragmentDynamicUniformBuffers[i][j]), RendererResult::Success, RendererResult::Failure)
+					CHECK_RESULT(AllocateBuffer(_fragmentDynamicUniformBuffers[i][j], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_fragmentDynamicUniformBuffersMemory[i][j]), RendererResult::Success, RendererResult::Failure)
+				}
+			}
+
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateDescriptorPool()
+		{
+			// Information about pool for the vertex uniform descriptors.
+			VkDescriptorPoolSize vertexPoolSize = {};
+			vertexPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			vertexPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size() * COMMAND_BUFFER_SETS);
+
+			// Information about pool for the fragment uniform descriptors.
+			VkDescriptorPoolSize fragmentPoolSize = {};
+			fragmentPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			fragmentPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size() * COMMAND_BUFFER_SETS);
+
+			// Information about pool for the fragment dynamic uniform descriptors.
+			VkDescriptorPoolSize fragmentDynamicPoolSize = {};
+			fragmentDynamicPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+			fragmentDynamicPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size() * COMMAND_BUFFER_SETS);
+
+			// Assemble pool sizes into an array.
+			boost::array<VkDescriptorPoolSize, 3> poolSizes = {
+				vertexPoolSize, fragmentPoolSize, fragmentDynamicPoolSize
+			};
+
+			// Descriptor pool creation information.
+			VkDescriptorPoolCreateInfo poolCreateInfo = {};
+			poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			poolCreateInfo.maxSets = static_cast<u32>(_swapchainImages.size() * COMMAND_BUFFER_SETS);
+			poolCreateInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
+			poolCreateInfo.pPoolSizes = poolSizes.data();
+
+			CHECK_RESULT(vkCreateDescriptorPool(_device._logical, &poolCreateInfo, nullptr, &_descriptorPool), VK_SUCCESS, RendererResult::Failure)
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateDescriptorSets()
+		{
+			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
+			{
+				// Setup a vector with layouts for each descriptor set created.
+				boost::container::vector<VkDescriptorSetLayout> setLayouts(_swapchainImages.size(), _descriptorSetLayout);
+
+				// Resize descriptor sets to match the uniform buffers they describe.
+				_descriptorSets[i].resize(_swapchainImages.size());
+
+				// Descriptor set allocation information.
+				VkDescriptorSetAllocateInfo allocateInfo = {};
+				allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+				allocateInfo.descriptorPool = _descriptorPool;
+				allocateInfo.descriptorSetCount = static_cast<u32>(_swapchainImages.size());
+				allocateInfo.pSetLayouts = setLayouts.data();
+
+				// Allocate descriptor sets.
+				CHECK_RESULT(vkAllocateDescriptorSets(_device._logical, &allocateInfo, _descriptorSets[i].data()), VK_SUCCESS, RendererResult::Failure)
+
+				// Create the vectors to store descriptor set update information.
+				boost::container::vector<VkDescriptorBufferInfo> descriptorBuffer;
+				boost::container::vector<VkWriteDescriptorSet> descriptorWrite;
+
+				// Resize vectors to fit every single descriptor set.
+				descriptorBuffer.resize(3 * _descriptorSets[i].size());
+				descriptorWrite.resize(3 * _descriptorSets[i].size());
+
+				// Fill the information of the bindings between descriptor sets and uniform buffers.
+				for (usize j = 0; j < _descriptorSets[i].size(); ++j)
+				{
+					// Vertex descriptor buffer information.
+					descriptorBuffer[j].buffer = _vertexUniformBuffers[i][j];
+					descriptorBuffer[j].offset = 0;
+					descriptorBuffer[j].range = sizeof(VertexUniform);
+
+					// Vertex write descriptor set information.
+					descriptorWrite[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					descriptorWrite[j].dstSet = _descriptorSets[i][j];
+					descriptorWrite[j].dstBinding = 0;
+					descriptorWrite[j].dstArrayElement = 0;
+					descriptorWrite[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+					descriptorWrite[j].descriptorCount = 1;
+					descriptorWrite[j].pBufferInfo = &descriptorBuffer[j];
+
+					// Fragment descriptor buffer information.
+					descriptorBuffer[j + _descriptorSets[i].size()].buffer = _fragmentUniformBuffers[i][j];
+					descriptorBuffer[j + _descriptorSets[i].size()].offset = 0;
+					descriptorBuffer[j + _descriptorSets[i].size()].range = sizeof(FragmentUniform);
+
+					// Fragment write descriptor set information.
+					descriptorWrite[j + _descriptorSets[i].size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					descriptorWrite[j + _descriptorSets[i].size()].dstSet = _descriptorSets[i][j];
+					descriptorWrite[j + _descriptorSets[i].size()].dstBinding = 1;
+					descriptorWrite[j + _descriptorSets[i].size()].dstArrayElement = 0;
+					descriptorWrite[j + _descriptorSets[i].size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+					descriptorWrite[j + _descriptorSets[i].size()].descriptorCount = 1;
+					descriptorWrite[j + _descriptorSets[i].size()].pBufferInfo = &descriptorBuffer[j + _descriptorSets[i].size()];
+
+					// Fragment dynamic descriptor buffer information.
+					descriptorBuffer[j + 2 * _descriptorSets[i].size()].buffer = _fragmentDynamicUniformBuffers[i][j];
+					descriptorBuffer[j + 2 * _descriptorSets[i].size()].offset = 0;
+					descriptorBuffer[j + 2 * _descriptorSets[i].size()].range = GetUniformAlignment(sizeof(FragmentDynamicUniform));
+
+					// Fragment dynamic descriptor set information.
+					descriptorWrite[j + 2 * _descriptorSets[i].size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+					descriptorWrite[j + 2 * _descriptorSets[i].size()].dstSet = _descriptorSets[i][j];
+					descriptorWrite[j + 2 * _descriptorSets[i].size()].dstBinding = 2;
+					descriptorWrite[j + 2 * _descriptorSets[i].size()].dstArrayElement = 0;
+					descriptorWrite[j + 2 * _descriptorSets[i].size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+					descriptorWrite[j + 2 * _descriptorSets[i].size()].descriptorCount = 1;
+					descriptorWrite[j + 2 * _descriptorSets[i].size()].pBufferInfo = &descriptorBuffer[j + 2 * _descriptorSets[i].size()];
+				}
+
+				// Update the descriptor sets with the filled information.
+				vkUpdateDescriptorSets(_device._logical, descriptorWrite.size(), descriptorWrite.data(), 0, nullptr);
 			}
 
 			return RendererResult::Success;
@@ -1398,27 +1948,27 @@ namespace Re
 
 			for (usize i = 0; i < MAX_FRAME_DRAWS; ++i)
 			{
-				CHECK_RESULT(vkCreateSemaphore(_device._logical, &semaphoreCreateInfo, nullptr, &_imageAvailable[i]), VK_SUCCESS, RendererResult::Failure);
-				CHECK_RESULT(vkCreateSemaphore(_device._logical, &semaphoreCreateInfo, nullptr, &_renderFinished[i]), VK_SUCCESS, RendererResult::Failure);
-				CHECK_RESULT(vkCreateFence(_device._logical, &fenceCreateInfo, nullptr, &_drawFences[i]), VK_SUCCESS, RendererResult::Failure);
+				CHECK_RESULT(vkCreateSemaphore(_device._logical, &semaphoreCreateInfo, nullptr, &_imageAvailable[i]), VK_SUCCESS, RendererResult::Failure)
+				CHECK_RESULT(vkCreateSemaphore(_device._logical, &semaphoreCreateInfo, nullptr, &_renderFinished[i]), VK_SUCCESS, RendererResult::Failure)
+				CHECK_RESULT(vkCreateFence(_device._logical, &fenceCreateInfo, nullptr, &_drawFences[i]), VK_SUCCESS, RendererResult::Failure)
 			}
 
 			return RendererResult::Success;
 		}
 
-		RendererResult Renderer::RecordCommands()
+		RendererResult Renderer::RecordCommands(usize buffer, usize offset, usize size, bool isTransfer)
 		{
-			// Load next inactive command buffer.
-			usize inactive = (_currentBuffer.load() + 1) % COMMAND_BUFFER_SETS;
+			ASSERT(offset >= 0);
+			ASSERT(size <= _commandBuffers[buffer].size());
 
 			// Information about how to begin a command buffer.
 			VkCommandBufferBeginInfo bufferBeginInfo = {};
 			bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
 			// Define the values to clear the framebuffer attachments with.
-			VkClearValue clearValues[] = {
-				{ 0.6f, 0.65f, 0.4f, 1.0f }
-			};
+			boost::array<VkClearValue, 2> clearValues = {};
+			clearValues[0].color = Math::Colors::Black;
+			clearValues[1].depthStencil.depth = 1.0f;
 
 			// Information about to begin a render pass.
 			VkRenderPassBeginInfo passBeginInfo = {};
@@ -1426,60 +1976,176 @@ namespace Re
 			passBeginInfo.renderPass = _renderPass;
 			passBeginInfo.renderArea.offset = { 0, 0 };
 			passBeginInfo.renderArea.extent = _swapchainExtent;
-			passBeginInfo.clearValueCount = 1;
-			passBeginInfo.pClearValues = clearValues;
+			passBeginInfo.clearValueCount = static_cast<u32>(clearValues.size());
+			passBeginInfo.pClearValues = clearValues.data();
 			
-			// TODO: Analyze possible better solution for waiting idly.
-			CHECK_RESULT(vkDeviceWaitIdle(_device._logical), VK_SUCCESS, RendererResult::Failure);
-			for (usize i = 0; i < _commandBuffers[inactive].size(); ++i)
+			for (usize i = offset; i < (offset + size); ++i)
 			{
-				// Reset the command buffer.
-				CHECK_RESULT(vkResetCommandBuffer(_commandBuffers[inactive][i], 0), VK_SUCCESS, RendererResult::Failure);
-
 				// Set the correct framebuffer for the render pass.
 				passBeginInfo.framebuffer = _swapchainFramebuffers[i];
-
-				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[inactive][i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure);
-				vkCmdBeginRenderPass(_commandBuffers[inactive][i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+				
+				// Reset the command buffer.
+				CHECK_RESULT(vkResetCommandBuffer(_commandBuffers[buffer][i], 0), VK_SUCCESS, RendererResult::Failure)
+				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[buffer][i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure)
+				vkCmdBeginRenderPass(_commandBuffers[buffer][i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 				
 				if (_entitiesToRender.size() > 0)
 				{
-					vkCmdBindPipeline(_commandBuffers[inactive][i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+					vkCmdBindPipeline(_commandBuffers[buffer][i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
 
 					// Draw each renderable entity that has been streamed over to the renderer.
-					for (const auto& entity : _entitiesToRender)
+					if (isTransfer)
 					{
-						// Acquire required information from the entities to be rendered.
-						VkBuffer vertexBuffer = entity.second._vertexBuffer;
-						VkBuffer indexBuffer = entity.second._indexBuffer;
-						VkDeviceSize offsets[] = { 0 };
-						u32 count = entity.second._indexCount;
-
-						// Add rendering commands to the buffer.
-						vkCmdBindVertexBuffers(_commandBuffers[inactive][i], 0, 1, &vertexBuffer, offsets);
-						vkCmdBindIndexBuffer(_commandBuffers[inactive][i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-						vkCmdDrawIndexed(_commandBuffers[inactive][i], count, 1, 0, 0, 0);
+						usize j = 0;
+						BOOST_FOREACH(const auto& entity, boost::join(_entitiesToRender, _entitiesToTransfer))
+						{
+							RecordDraw(buffer, i, j, entity.second);
+							j++;
+						}
+					}
+					else
+					{
+						usize j = 0;
+						BOOST_FOREACH(const auto& entity, _entitiesToRender)
+						{
+							RecordDraw(buffer, i, j, entity.second);
+							j++;
+						}
 					}
 				}
 
-				vkCmdEndRenderPass(_commandBuffers[inactive][i]);
-				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[inactive][i]), VK_SUCCESS, RendererResult::Failure);
+				vkCmdEndRenderPass(_commandBuffers[buffer][i]);
+				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[buffer][i]), VK_SUCCESS, RendererResult::Failure)
 			}
 			
-			// Update current command buffer being rendered to the screen.
-			printf("Recording Commands...\n");
-			_currentBuffer.store(inactive);
 			return RendererResult::Success;
+		}
+
+		void Renderer::RecordDraw(usize bufferSet, usize bufferIndex, usize entityIndex, const RenderInfo& renderInfo)
+		{
+			// Acquire required information from the entities to be rendered.
+			VkBuffer vertexBuffer = renderInfo._vertexBuffer;
+			VkBuffer indexBuffer = renderInfo._indexBuffer;
+			VkDeviceSize offsets[] = { 0 };
+			u32 count = renderInfo._indexCount;
+
+			// Bind vertex and index buffers.
+			vkCmdBindVertexBuffers(_commandBuffers[bufferSet][bufferIndex], 0, 1, &vertexBuffer, offsets);
+			vkCmdBindIndexBuffer(_commandBuffers[bufferSet][bufferIndex], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+			// Create vertex push constant from object and camera information.
+			VertexPush vp = {};
+			vp._model = renderInfo._transformComponent ? renderInfo._transformComponent->GetModel() : Math::Matrix::Identity();
+			vp._view = _activeCamera ? _activeCamera->GetView() : Math::Matrix::Identity();
+
+			// Push constants into the shaders.
+			vkCmdPushConstants(_commandBuffers[bufferSet][bufferIndex], _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 
+				0, sizeof(VertexPush), &vp);
+
+			// Configure dynamic offsets for dynamic buffers.
+			u32 dynamicOffset = static_cast<u32>(GetUniformAlignment(sizeof(FragmentDynamicUniform))) * entityIndex;
+
+			// Bind descriptor sets.
+			vkCmdBindDescriptorSets(_commandBuffers[bufferSet][bufferIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout,
+				0, 1, &_descriptorSets[bufferSet][bufferIndex], 1, &dynamicOffset);
+
+			// Add rendering commands to the buffer.
+			vkCmdDrawIndexed(_commandBuffers[bufferSet][bufferIndex], count, 1, 0, 0, 0);
+		}
+
+		void Renderer::UpdatePointLight(FragmentUniform::FragmentPointLight* dstLight, const boost::shared_ptr<Entities::PointLight>& srcLight)
+		{
+			dstLight->_base._color = srcLight->GetColor();
+			dstLight->_base._ambientStrength = srcLight->GetAmbientStrength();
+			dstLight->_base._diffuseStrength = srcLight->GetDiffuseStrength();
+			dstLight->_position = srcLight->GetPosition();
+			dstLight->_constantAttenuation = srcLight->GetConstantAttenuation();
+			dstLight->_linearAttenuation = srcLight->GetLinearAttenuation();
+			dstLight->_quadraticAttenuation = srcLight->GetQuadraticAttenuation();
+		}
+
+		void Renderer::UpdateSpotLight(FragmentUniform::FragmentSpotLight* dstLight, const boost::shared_ptr<Entities::SpotLight>& srcLight)
+		{
+			UpdatePointLight(&dstLight->_base, srcLight);
+			dstLight->_direction = srcLight->GetDirection();
+			dstLight->_cutoffAngle = cosf(Math::ToRadians(srcLight->GetCutoffAngle()));
+		}
+
+		void Renderer::UpdateVertexUniformBuffers(const usize bufferSet)
+		{
+			for (usize i = 0; i < _vertexUniformBuffersMemory[bufferSet].size(); ++i)
+			{
+				// Map pointer to buffer location.
+				void* data;
+				vkMapMemory(_device._logical, _vertexUniformBuffersMemory[bufferSet][i], 0, sizeof(VertexUniform), 0, &data);
+
+				// Transfer data to buffer memory.
+				Memory::NMemCpy(data, &_vertexUniform, sizeof(VertexUniform));
+
+				// Unmap memory from pointer.
+				vkUnmapMemory(_device._logical, _vertexUniformBuffersMemory[bufferSet][i]);
+			}
+		}
+
+		void Renderer::UpdateFragmentUniformBuffers(const usize bufferSet)
+		{
+			for (usize i = 0; i < _fragmentUniformBuffersMemory[bufferSet].size(); ++i)
+			{
+				// Map pointer to buffer location.
+				void* data;
+				vkMapMemory(_device._logical, _fragmentUniformBuffersMemory[bufferSet][i], 0, sizeof(FragmentUniform), 0, &data);
+
+				// Transfer data to buffer memory.
+				Memory::NMemCpy(data, &_fragmentUniform, sizeof(FragmentUniform));
+
+				// Unmap memory from pointer.
+				vkUnmapMemory(_device._logical, _fragmentUniformBuffersMemory[bufferSet][i]);
+			}
+		}
+
+		void Renderer::UpdateFragmentDynamicUniformBuffers(const usize bufferSet)
+		{
+			const usize uniformAlignment = GetUniformAlignment(sizeof(FragmentDynamicUniform));
+			for (usize i = 0; i < _fragmentDynamicUniformBuffersMemory[bufferSet].size(); ++i)
+			{
+				// Map pointer to buffer location.
+				void* data;
+				vkMapMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[bufferSet][i], 0, uniformAlignment *
+					_entitiesToRender.size() + _entitiesToTransfer.size(), 0, &data);
+
+				// Copy entity data over to fragment dynamic buffer.
+				usize j = 0;
+				BOOST_FOREACH(const auto& entity, boost::join(_entitiesToRender, _entitiesToTransfer))
+				{
+					// Construct data to place into shader.
+					FragmentDynamicUniform::FragmentMaterial material = {};
+					material._specularPower = entity.second._material->GetSpecularPower();
+					material._specularStrength = entity.second._material->GetSpecularStrength();
+
+					FragmentDynamicUniform dynamicUniform = {};
+					dynamicUniform._material = material;
+
+					// Read memory with specified alignment.
+					FragmentDynamicUniform* dynamicMemory = (FragmentDynamicUniform*)((usize)data + (j * uniformAlignment));
+					*dynamicMemory = dynamicUniform;
+
+					// Update index.
+					j++;
+				}
+
+				// Unmap memory from pointer.
+				vkUnmapMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[bufferSet][i]);
+			}
 		}
 		
 		void Renderer::DestroyCommandPools()
 		{
-			if (_graphicsPool != _transferPool)
+			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
 			{
-				vkDestroyCommandPool(_device._logical, _transferPool, nullptr);
+				vkDestroyCommandPool(_device._logical, _graphicsPools[i], nullptr);
 			}
 
-			vkDestroyCommandPool(_device._logical, _graphicsPool, nullptr);
+			vkDestroyCommandPool(_device._logical, _transferPool, nullptr);
 		}
 
 		void Renderer::DestroyEntities()
@@ -1505,6 +2171,13 @@ namespace Re
 			vkDestroySwapchainKHR(_device._logical, _swapchain, nullptr);
 		}
 
+		void Renderer::DestroyDepthBufferImage()
+		{
+			vkDestroyImageView(_device._logical, _depthBufferImageView, nullptr);
+			vkDestroyImage(_device._logical, _depthBufferImage, nullptr);
+			vkFreeMemory(_device._logical, _depthBufferMemory, nullptr);
+		}
+
 		void Renderer::DestroyFramebuffers()
 		{
 			// Destroy each of the created framebuffers.
@@ -1524,6 +2197,33 @@ namespace Re
 			}
 		}
 
+		void Renderer::DestroyUniformBuffers()
+		{
+			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
+			{
+				// Destroy vertex uniform buffers.
+				for (usize j = 0; j < _vertexUniformBuffers[i].size(); ++j)
+				{
+					vkDestroyBuffer(_device._logical, _vertexUniformBuffers[i][j], nullptr);
+					vkFreeMemory(_device._logical, _vertexUniformBuffersMemory[i][j], nullptr);
+				}
+
+				// Destroy fragment uniform buffers.
+				for (usize j = 0; j < _fragmentUniformBuffers[i].size(); ++j)
+				{
+					vkDestroyBuffer(_device._logical, _fragmentUniformBuffers[i][j], nullptr);
+					vkFreeMemory(_device._logical, _fragmentUniformBuffersMemory[i][j], nullptr);
+				}
+
+				// Destroy fragment dynamic uniform buffers.
+				for (usize j = 0; j < _fragmentDynamicUniformBuffers[i].size(); ++j)
+				{
+					vkDestroyBuffer(_device._logical, _fragmentDynamicUniformBuffers[i][j], nullptr);
+					vkFreeMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[i][j], nullptr);
+				}
+			}
+		}
+
 		#if PLATFORM_WINDOWS
 		RendererResult Renderer::CreateWindowsSurface(const Platform::Win32Window& window)
 		{
@@ -1532,7 +2232,7 @@ namespace Re
 			createInfo.hinstance = window.GetInstance();
 			createInfo.hwnd = window.GetHandle();
 
-			CHECK_RESULT(vkCreateWin32SurfaceKHR(_instance, &createInfo, nullptr, &_surface), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(vkCreateWin32SurfaceKHR(_instance, &createInfo, nullptr, &_surface), VK_SUCCESS, RendererResult::Failure)
 			return RendererResult::Success;
 		}
 
@@ -1551,7 +2251,7 @@ namespace Re
 			createInfo.pUserData = nullptr;
 
 			auto createFunction = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(_instance, "vkCreateDebugUtilsMessengerEXT");
-			CHECK_RESULT(createFunction(_instance, &createInfo, nullptr, &_debugMessenger), VK_SUCCESS, RendererResult::Failure);
+			CHECK_RESULT(createFunction(_instance, &createInfo, nullptr, &_debugMessenger), VK_SUCCESS, RendererResult::Failure)
 			return RendererResult::Success;
 		}
 

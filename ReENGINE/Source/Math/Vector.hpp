@@ -17,31 +17,31 @@ namespace Re
 		 * @brief This data type is for holding a vector in 2-D space, using floating-point coordinates.
 		 *
 		 */
-		struct NVector 
+		struct Vector 
 		{
 			f32 X;
 			f32 Y;
 
 			/**
-			 * NVector Constructor
+			 * Vector Constructor
 			 *
 			 * The default constructor which initializes the vector to the zero vector.
 			 *
 			 */
-			NVector();
+			Vector();
 
 			/**
-			 * NVector Constructor
+			 * Vector Constructor
 			 *
 			 * This constructor initializes the vector with components equal to the same floating-point number.
 			 *
 			 * @param f32 InF: The value to initialize the components to.
 			 *
 			 */
-			explicit NVector(const f32 InF);
+			explicit Vector(const f32 InF);
 
 			/**
-			 * NVector Constructor
+			 * Vector Constructor
 			 *
 			 * This constructor initializes the vector to given floating-point values.
 			 *
@@ -49,63 +49,64 @@ namespace Re
 			 * @param f32 InY: The value of the Y coordinate.
 			 *
 			 */
-			explicit NVector(const f32 InX, const f32 InY);
+			explicit Vector(const f32 InX, const f32 InY);
 
 			/**
-			 * NVector Add
+			 * Vector Add
 			 *
 			 * This method adds two vectors together, the current one with the given one.
 			 *
-			 * @param const NVector& InOther: The vector add with the current one.
+			 * @param const Vector& InOther: The vector add with the current one.
 			 *
-			 * @return NVector&: A reference to self.
+			 * @return Vector&: A reference to self.
 			 *
 			 */
-			NVector Add(const NVector& InOther);
+			Vector Add(const Vector& InOther);
 
 			/**
-			 * NVector Divide
+			 * Vector Divide
 			 *
 			 * This method divides a vector by a scalar.
 			 *
 			 * @param const f32 InScalar: The scalar to divide the vector by.
 			 *
-			 * @return NVector&: A reference to self.
+			 * @return Vector&: A reference to self.
 			 *
 			 */
-			NVector Divide(const f32 InScalar);
+			Vector Divide(const f32 InScalar);
 
 			/**
-			 * NVector Multiply
+			 * Vector Multiply
 			 *
 			 * This method multiplies a vector and a scalar.
 			 *
 			 * @param const f32 InScalar: The scalar to multiply the vector by.
 			 *
-			 * @return NVector&: A reference to self.
+			 * @return Vector&: A reference to self.
 			 *
 			 */
-			NVector Multiply(const f32 InScalar);
+			Vector Multiply(const f32 InScalar);
 
 			/**
-			 * NVector Zero
+			 * Vector Zero
 			 *
 			 * This method returns the zero vector.
 			 *
-			 * @return NVector: A copy of the zero vector.
+			 * @return Vector: A copy of the zero vector.
 			 *
 			 */
-			inline static NVector Zero() { return NVector(0.0f); }
+			inline static Vector Zero() { return Vector(0.0f); }
 
-			bool operator==(const NVector& InOther);
+			bool operator==(const Vector& InOther);
+			bool operator!=(const Vector& InOther);
 
-			NVector& operator+=(const NVector& InOther);
-			NVector& operator*=(const f32 InScalar);
-			NVector& operator/=(const f32 InScalar);
+			Vector& operator+=(const Vector& InOther);
+			Vector& operator*=(const f32 InScalar);
+			Vector& operator/=(const f32 InScalar);
 
-			friend NVector operator+(NVector InLeft, const NVector& InRight);
-			friend NVector operator*(NVector InVector, const f32 InScalar);
-			friend NVector operator/(NVector InVector, const f32 InScalar);
+			friend Vector operator+(Vector InLeft, const Vector& InRight);
+			friend Vector operator*(Vector InVector, const f32 InScalar);
+			friend Vector operator/(Vector InVector, const f32 InScalar);
 		};
 	}
 }

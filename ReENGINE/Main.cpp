@@ -12,6 +12,7 @@
 #include "Core/Entity.hpp"
 #include "Components/RenderComponent.hpp"
 #include "Components/TransformComponent.hpp"
+#include "Entities/Cube.hpp"
 #include "Memory/StackAllocator.hpp"
 
 #include "Core/World.hpp"
@@ -25,6 +26,7 @@ namespace boost
 	}
 }
 
+using namespace Re;
 using namespace Re::Core;
 using namespace Re::Core::Localization;
 
@@ -59,26 +61,7 @@ public:
 NewtonManager nNewtonManager;
 TestGame nGameManager;
 
-boost::container::vector<Re::Graphics::Vertex> vertices_left = {
-	{ -0.1f, -0.4f, +0.0f,		+1.0f, +0.0f, +0.0f },
-	{ -0.1f, +0.4f, +0.0f,		+0.0f, +1.0f, +0.0f },
-	{ -0.9f, +0.4f, +0.0f,		+0.0f, +0.0f, +1.0f },
-	{ -0.9f, -0.4f, +0.0f,		+1.0f, +1.0f, +0.0f },
-};
-
-boost::container::vector<Re::Graphics::Vertex> vertices_right = {
-	{ +0.9f, -0.2f, +0.0f,		+1.0f, +0.0f, +0.0f },
-	{ +0.9f, +0.2f, +0.0f,		+0.0f, +1.0f, +0.0f },
-	{ +0.1f, +0.2f, +0.0f,		+0.0f, +0.0f, +1.0f },
-	{ +0.1f, -0.2f, +0.0f,		+1.0f, +1.0f, +0.0f },
-};
-
-boost::container::vector<u32> indices = {
-	0, 1, 2,
-	2, 3, 0,
-};
-
-#define NUM_ENTITIES 256
+const usize NUM_ENTITIES = 16384;
 
 /* TESTING CLASS - TO BE FULLY IMPLEMENTED LATER */
 // WINDOWS MAIN: i32 WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, i32) 
@@ -90,21 +73,45 @@ int main()
 	#endif
 
 	World world;
-	
-	//for (usize i = 0; i < NUM_ENTITIES; ++i)
-	//{
-	//	auto ent = world.SpawnEntity<Entity>();
-	//	ent->AddComponent<Re::Components::RenderComponent>(vertices_left, indices);
-	//}
 
-	auto ent_left = world.SpawnEntity<Entity>();
-	ent_left->AddComponent<Re::Components::RenderComponent>(vertices_left, indices);
-
-	auto ent_right = world.SpawnEntity<Entity>();
-	ent_right->AddComponent<Re::Components::RenderComponent>(vertices_right, indices);
-
+	// Initialize the world.
 	world.Startup();
+
+	// TEST CODE: Create a camera to view the world from.
+	auto camera = world.SpawnEntity<Entities::Camera>(45.0f, 0.1f, 1000.0f);
+	camera->GetTransform()->Translate(3.0f, 0.0f, 7.0f);
+
+	// TEST CODE: Create a light to iluminate the world.
+	// auto directionalLight = SpawnEntity<Entities::DirectionalLight>(Math::Colors::White, Math::Vector3(2.0f, 1.0f, -2.0f), 0.2f, 0.7f);
+	// auto pointLight0 = world.SpawnEntity<Entities::PointLight>(Math::Colors::White, Math::Vector3(3.0f, 2.0f, 3.0f), 0.10f, 1.0f, 0.2f, 0.3f);
+	auto spotLight0 = world.SpawnEntity<Entities::SpotLight>(Math::Colors::White, Math::Vector3(3.0f, 0.0f, 7.0f), Math::Vector3(0.0f, 0.0f, -1.0f), 20.0f, 0.2f, 1.0f, 0.1f, 0.02f);
+	camera->GetTransform()->OnTransformChanged.connect([camera, spotLight0]() {
+		spotLight0->SetPosition(camera->GetTransform()->GetPosition());
+		spotLight0->SetDirection(camera->GetTransform()->GetTransform().Forward());
+	});
+
+	// TEST CODE: Create some test materials.
+	auto material0 = boost::make_shared<Graphics::Material>(32.0f, 1.0f);
+	auto material1 = boost::make_shared<Graphics::Material>(1.0f, 0.0f);
+
+	// TEST CODE: Create some test cubes.
+	//auto cube0 = world.SpawnEntity<Entities::Cube>(material0);
+	//auto cube1 = world.SpawnEntity<Entities::Cube>(2.0f, 0.0f, 0.0f, 1.0f, material1);
+
+	// TEST CODE: Spawn loads of cubes to test performance.
+	usize iterations = round(sqrt(NUM_ENTITIES));
+	for (usize i = 0; i < iterations; ++i)
+	{
+		for (usize j = 0; j < iterations; ++j)
+		{
+			world.SpawnEntity<Entities::Cube>(i * 2.0f, 0.0f, j * 2.0f, 1.0f, ((i + j) % 2 == 0) ? material0 : material1);
+		}
+	}
+
+	// Run the main loop of the engine.
 	world.Loop();
+
+	// Shutdown and cleanup the world.
 	world.Shutdown();
 
 	// Module Start-up

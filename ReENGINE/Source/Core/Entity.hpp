@@ -18,53 +18,53 @@
 
 namespace Re
 {
-	namespace Core
-	{
-		class Entity
-		{
-			friend class World;
+    namespace Core
+    {
+        class Entity
+        {
+            friend class World;
 
-			public:
-				virtual ~Entity();
+        public:
+            virtual ~Entity();
 
-				virtual void Initialize();
-				virtual void Update(float DeltaTime);
-			
-				INLINE u32 GetId() const { return _id; }
-				INLINE World* GetWorld() const { return _owner; }
+            virtual void Initialize();
+            virtual void Update(float DeltaTime);
 
-				template <typename ComponentType, typename... ComponentArgs>
-				ComponentType* AddComponent(ComponentArgs&&... args)
-				{
-					static_assert(boost::is_base_of<Component, ComponentType>::value, "ComponentType passed for AddComponent does not inherit from Component.");
-					auto newComponent = new ComponentType(std::forward<ComponentArgs>(args)...);
+            INLINE u32 GetId() const { return _id; }
+            INLINE World* GetWorld() const { return _owner; }
 
-					_components.emplace_unique(typeid(ComponentType), newComponent);
-					newComponent->_owner = this;
-					newComponent->Initialize();
-					return newComponent;
-				}
+            template <typename ComponentType, typename... ComponentArgs>
+            ComponentType* AddComponent(ComponentArgs&&... args)
+            {
+                static_assert(boost::is_base_of<Component, ComponentType>::value,
+                    "ComponentType passed for AddComponent does not inherit from Component.");
+                auto newComponent = new ComponentType(std::forward<ComponentArgs>(args)...);
 
-				template <typename ComponentType>
-				bool HasComponent() const
-				{
-					return _components.find(typeid(ComponentType)) != _components.end();
-				}
+                _components.emplace_unique(typeid(ComponentType), newComponent);
+                newComponent->Owner = this;
+                newComponent->Initialize();
+                return newComponent;
+            }
 
-				template <typename ComponentType>
-				ComponentType* GetComponent()
-				{
-					return static_cast<ComponentType*>(_components[typeid(ComponentType)]);
-				}
+            template <typename ComponentType>
+            bool HasComponent() const
+            {
+                return _components.contains(typeid(ComponentType));
+            }
 
-		private:
-			Entity();
+            template <typename ComponentType>
+            ComponentType* GetComponent()
+            {
+                return static_cast<ComponentType*>(_components[typeid(ComponentType)]);
+            }
 
-		private:
-			boost::container::map<std::type_index, Component*> _components;
-			u32 _id;
-			World* _owner;
+        protected:
+            Entity();
 
-		};
-	}
+        private:
+            boost::container::map<std::type_index, Component*> _components;
+            u32 _id;
+            World* _owner;
+        };
+    }
 }

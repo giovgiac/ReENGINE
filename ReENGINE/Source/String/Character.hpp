@@ -16,7 +16,7 @@ namespace Re
 {
 	namespace Core
 	{
-		/*
+		/**
 		 * @brief This array contains a couple of offsets used in the reading of UTF-8
 		 * characters.
 		 *
@@ -26,7 +26,7 @@ namespace Re
 			0x03C82080UL, 0xFA082080UL, 0x82082080UL
 		};
 
-		/*
+		/**
 		 * @brief This function advances the character by one in an UTF-8 string and updates
 		 * an index passed in.
 		 *
@@ -38,7 +38,7 @@ namespace Re
 		 */
 		extern utf32 NCharNext(const utf8* str, i32* index);
 
-		/*
+		/**
 		 * @brief This function calculates and returns the amount of bytes occupied by an
 		 * UTF-8 string.
 		 *
@@ -49,7 +49,7 @@ namespace Re
 		 */
 		extern i32 NStrBytes(const utf8* str);
 
-		/*
+		/**
 		 * @brief This function compares two strings of characters of UTF-8 encoding.
 		 *
 		 * @return true if the strings are equal, false otherwise.
@@ -57,7 +57,7 @@ namespace Re
 		 */
 		extern bool NStrCmp(const utf8* left, const utf8* right);
 
-		/*
+		/**
 		 * @brief This function duplicates a string of characters of UTF-8 encoding.
 		 * It allocates space in memory using the NDefaultAllocator, unless
 		 * specified otherwise.
@@ -79,7 +79,7 @@ namespace Re
 			return result;
 		}
 
-		/*
+		/**
 		 * @brief This function calculates the length of one string made of UTF-8 characters
 		 * and returns it.
 		 *

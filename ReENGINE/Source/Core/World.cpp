@@ -8,66 +8,40 @@
 #include "World.hpp"
 
 #include "Components/RenderComponent.hpp"
-
-boost::container::vector<Re::Graphics::Vertex> vert = {
-	{ +0.9f, -0.2f, +0.0f,		+1.0f, +0.0f, +0.0f },
-	{ +0.9f, +0.2f, +0.0f,		+0.0f, +1.0f, +0.0f },
-	{ +0.1f, +0.2f, +0.0f,		+0.0f, +0.0f, +1.0f },
-	{ +0.1f, -0.2f, +0.0f,		+1.0f, +1.0f, +0.0f },
-};
-
-boost::container::vector<u32> ind = {
-	0, 1, 2,
-	2, 3, 0,
-};
+#include "Entities/Cube.hpp"
 
 namespace Re
 {
 	namespace Core
 	{
 		World::World()
-			: _dispatchQueue(128), _dispatchThreadShouldClose(false) //_dispatchThreadsMutex(NUM_DISPATCH_THREADS)
+			: _dispatchQueue(128), _dispatchThreadShouldClose(false)
 		{}
 
-		WorldResult World::Startup()
+		void World::AddEntity(const boost::shared_ptr<Core::Entity>& entity)
 		{
-			CHECK_RESULT(_window.Startup("Test Application", 1024, 768, SW_SHOW), Platform::WindowResult::Success, WorldResult::Failure);
-			CHECK_RESULT(_renderer.Startup(_window), Graphics::RendererResult::Success, WorldResult::Failure);
-
-			// Initialize dispatching thread.
-			_dispatchThreadShouldClose = false;
-			_dispatchThread = boost::thread(boost::bind(&World::DispatchToRenderer, this));
-
-			return WorldResult::Success;
+			_dispatchQueue.push(entity.get());
+			_shouldDispatch.notify_one();
 		}
 
-		void World::Shutdown()
+		void World::AddEntity(const boost::shared_ptr<Entities::Camera>& camera)
 		{
-			JoinDispatchThreads();
-			_entities.clear();
-			_renderer.Shutdown();
-			_window.Shutdown();
+			_renderer.SetActiveCamera(camera);
 		}
 
-		void World::Loop()
+		void World::AddEntity(const boost::shared_ptr<Entities::DirectionalLight>& light)
 		{
-			bool bAdded = false;
+			_renderer.ActivateLight(light);
+		}
 
-			_timer.Reset();
-			_timer.Start();
-			while (!_window.GetShouldClose())
-			{
-				_window.PollEvents();
-				_timer.Tick();
-				_renderer.Render();
+		void World::AddEntity(const boost::shared_ptr<Entities::PointLight>& light)
+		{
+			_renderer.ActivateLight(light);
+		}
 
-				//if (_timer.ElapsedTime() >= 10.0f && !bAdded)
-				//{
-				//	auto entity = SpawnEntity<Entity>();
-				//	entity->AddComponent<Components::RenderComponent>(vert, ind);
-				//	bAdded = true;
-				//}
-			}
+		void World::AddEntity(const boost::shared_ptr<Entities::SpotLight>& light)
+		{
+			_renderer.ActivateLight(light);
 		}
 
 		void World::DispatchToRenderer()
@@ -103,6 +77,66 @@ namespace Re
 
 			// Join dispatch thread.
 			_dispatchThread.join();
+		}
+
+		WorldResult World::Startup()
+		{
+			CHECK_RESULT(_window.Startup("Test Application", 1024, 768, SW_SHOW), Platform::WindowResult::Success, WorldResult::Failure);
+			CHECK_RESULT(_renderer.Startup(_window), Graphics::RendererResult::Success, WorldResult::Failure);
+
+			// Initialize dispatching thread.
+			_dispatchThreadShouldClose = false;
+			_dispatchThread = boost::thread(boost::bind(&World::DispatchToRenderer, this));
+
+			return WorldResult::Success;
+		}
+
+		void World::Shutdown()
+		{
+			JoinDispatchThreads();
+			_entities.clear();
+			_renderer.Shutdown();
+			_window.Shutdown();
+		}
+
+		void World::Loop()
+		{
+			bool bAdded = false;
+			u32 frames = 0;
+			f32 elapsed = 0;
+
+			_timer.Reset();
+			_timer.Start();
+			while (!_window.GetShouldClose())
+			{
+				// Game Loop design pattern.
+				_timer.Tick();
+				_window.PollEvents();
+				Update();
+				_renderer.Render();
+				
+				// Calculate FPS and print to console output.
+				if (elapsed >= 1.0f)
+				{
+					printf("FPS: %.2f\n", (f32)frames / elapsed);
+					elapsed = 0.0f;
+					frames = 0;
+
+					// TEST CODE: Spawn a cube every second.
+					// SpawnEntity<Entities::Cube>(rand() % 50, 0.0f, rand() % 50, 1.0f);
+				}
+
+				frames++;
+				elapsed += _timer.DeltaTime();
+			}
+		}
+
+		void World::Update()
+		{
+			for (auto& entity : _entities)
+			{
+				entity.second->Update(_timer.DeltaTime());
+			}
 		}
 	}
 }

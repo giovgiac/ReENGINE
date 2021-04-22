@@ -13,6 +13,12 @@
 #include <boost/container/map.hpp>
 
 boost::container::map<HWND, Re::Platform::Win32Window*> windowMap;
+boost::container::map<i32, Re::Core::Input::Keys> codeToKey = {
+	{ 0x41, Re::Core::Input::Keys::A },
+	{ 0x44, Re::Core::Input::Keys::D },
+	{ 0x53, Re::Core::Input::Keys::S },
+	{ 0x57, Re::Core::Input::Keys::W }
+};
 
 /*
  * @brief This callback function handles messages sent to the mainWnd.
@@ -43,10 +49,18 @@ namespace Re
 	namespace Platform
 	{
 		Win32Window::Win32Window()
-			: _hWnd(NULL), _hInstance(NULL), _title(""), _width(-1), _height(-1), _shouldClose(false)
+			: _hWnd(NULL), _hInstance(NULL), _title(""), _width(-1), _height(-1), _shouldClose(false),
+			_prevMouseX(0), _prevMouseY(0), _firstMouse(true)
 		{}
 
-		WindowResult Win32Window::Startup(LPCSTR title, i32 width, i32 height, i32 nCmdShow)
+		Win32Window::~Win32Window()
+		{
+			// Clear listening events upon window destruction.
+			KeyEvent.disconnect_all_slots();
+			MouseEvent.disconnect_all_slots();
+		}
+
+		WindowResult Win32Window::Startup(LPCSTR title, i32 width, i32 height, i32 nCmdShow, bool captureMouse)
 		{
 			// Store class members.
 			_hInstance = GetModuleHandle(NULL);
@@ -93,6 +107,13 @@ namespace Re
 			ShowWindow(_hWnd, nCmdShow);
 			UpdateWindow(_hWnd);
 
+			// Capture mouse if requested.
+			if (captureMouse)
+			{
+				SetCapture(_hWnd);
+				ShowCursor(false);
+			}
+
 			return WindowResult::Success;
 		}
 
@@ -117,15 +138,61 @@ namespace Re
 			// Handle incoming messages to this window.
 			switch (msg)
 			{
+			case WM_KEYDOWN:
+			case WM_SYSKEYDOWN:
 			case WM_KEYUP:
-				if (wParam == VK_ESCAPE)
+			case WM_SYSKEYUP:
+			{
+				const auto action = (HIWORD(lParam) & KF_UP) ? Core::Input::Action::Release : Core::Input::Action::Press;
+				if (action == Core::Input::Action::Release && wParam == VK_ESCAPE)
 				{
 					_shouldClose = true;
 					PostQuitMessage(0);
 					return 0;
 				}
+				else
+				{
+					if (codeToKey.contains(wParam))
+					{
+						// Invoke event handler passing the key code and action.
+						KeyEvent(action, codeToKey[wParam]);
+					}
 
+					break;
+				}
+			}
+			case WM_MOUSEMOVE:
+			{
+				tagPOINT centerCoordinates, mouseCoordinates;
+
+				// Read mouse coordinates and convert to screen space.
+				mouseCoordinates = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+				ClientToScreen(hWnd, &mouseCoordinates);
+
+				if (_firstMouse)
+				{
+					// Store current mouse positions for posterior usage.
+					_prevMouseX = mouseCoordinates.x;
+					_prevMouseY = mouseCoordinates.y;
+
+					_firstMouse = false;
+					break;
+				}
+
+				// Invoke event handler passing the mouse position deltas.
+				MouseEvent(mouseCoordinates.x - _prevMouseX, _prevMouseY - mouseCoordinates.y);
+
+				// Reset cursor position to screen center.
+				centerCoordinates = { _width / 2, _height / 2 };
+				ClientToScreen(hWnd, &centerCoordinates);
+				SetCursorPos(centerCoordinates.x, centerCoordinates.y);
+
+				// Store current mouse positions for posterior usage.
+				_prevMouseX = centerCoordinates.x;
+				_prevMouseY = centerCoordinates.y;
 				break;
+			}
+
 			case WM_DESTROY:
 				_shouldClose = true;
 				PostQuitMessage(0);

@@ -27,6 +27,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Components\InputComponent.hpp" />
     <ClInclude Include="Source\Components\RenderComponent.hpp" />
     <ClInclude Include="Source\Components\TransformComponent.hpp" />
     <ClInclude Include="Source\Core\Component.hpp" />
@@ -35,8 +36,16 @@
     <ClInclude Include="Source\Core\Debug\Debug.hpp" />
     <ClInclude Include="Source\Core\GameManager.hpp" />
     <ClInclude Include="Source\Core\Hash\FNV.hpp" />
+    <ClInclude Include="Source\Core\Input.hpp" />
     <ClInclude Include="Source\Core\Result.hpp" />
     <ClInclude Include="Source\Core\World.hpp" />
+    <ClInclude Include="Source\Entities\Camera.hpp" />
+    <ClInclude Include="Source\Entities\Cube.hpp" />
+    <ClInclude Include="Source\Entities\DirectionalLight.hpp" />
+    <ClInclude Include="Source\Entities\Light.hpp" />
+    <ClInclude Include="Source\Entities\PointLight.hpp" />
+    <ClInclude Include="Source\Entities\SpotLight.hpp" />
+    <ClInclude Include="Source\Graphics\Material.hpp" />
     <ClInclude Include="Source\Graphics\Renderer.hpp" />
     <ClInclude Include="Source\Graphics\Vulkan\Renderer.hpp" />
     <ClInclude Include="Source\Graphics\Vertex.hpp" />
@@ -46,6 +55,7 @@
     <ClInclude Include="Source\Math\Color.hpp" />
     <ClInclude Include="Source\Math\Math.hpp" />
     <ClInclude Include="Source\Math\Matrix.hpp" />
+    <ClInclude Include="Source\Math\Rotator.hpp" />
     <ClInclude Include="Source\Math\Transform.hpp" />
     <ClInclude Include="Source\Math\Vector.hpp" />
     <ClInclude Include="Source\Math\Vector3.hpp" />
@@ -66,17 +76,27 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Source\Components\InputComponent.cpp" />
     <ClCompile Include="Source\Components\RenderComponent.cpp" />
     <ClCompile Include="Source\Components\TransformComponent.cpp" />
     <ClCompile Include="Source\Core\Entity.cpp" />
     <ClCompile Include="Source\Core\Debug\Assert.cpp" />
     <ClCompile Include="Source\Core\Hash\FNV.cpp" />
     <ClCompile Include="Source\Core\World.cpp" />
+    <ClCompile Include="Source\Entities\Camera.cpp" />
+    <ClCompile Include="Source\Entities\Cube.cpp" />
+    <ClCompile Include="Source\Entities\DirectionalLight.cpp" />
+    <ClCompile Include="Source\Entities\Light.cpp" />
+    <ClCompile Include="Source\Entities\PointLight.cpp" />
+    <ClCompile Include="Source\Entities\SpotLight.cpp" />
+    <ClCompile Include="Source\Graphics\Material.cpp" />
+    <ClCompile Include="Source\Graphics\Vertex.cpp" />
     <ClCompile Include="Source\Graphics\Vulkan\Renderer.cpp" />
     <ClCompile Include="Source\Localization\LocalizationManager.cpp" />
     <ClCompile Include="Source\Localization\Language.cpp" />
     <ClCompile Include="Source\Math\Math.cpp" />
     <ClCompile Include="Source\Math\Matrix.cpp" />
+    <ClCompile Include="Source\Math\Transform.cpp" />
     <ClCompile Include="Source\Math\Vector.cpp" />
     <ClCompile Include="Source\Math\Vector3.cpp" />
     <ClCompile Include="Source\Memory\DefaultAllocator.cpp" />
@@ -169,41 +189,41 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\VulkanSDK\1.2.141.2\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
+    <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\</IntDir>
-    <LibraryPath>C:\VulkanSDK\1.2.141.2\Lib32;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib32;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\VulkanSDK\1.2.141.2\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\VulkanSDK\1.2.141.2\Lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\VulkanSDK\1.2.141.2\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
+    <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\</IntDir>
-    <LibraryPath>C:\VulkanSDK\1.2.141.2\Lib32;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib32;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Production|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Microsoft Visual Studio 14.0\Team Tools\Static Analysis Tools\Rule Sets\NativeRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <RunCodeAnalysis>true</RunCodeAnalysis>
-    <IncludePath>C:\VulkanSDK\1.2.141.2\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
+    <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\</IntDir>
-    <LibraryPath>C:\VulkanSDK\1.2.141.2\Lib32;$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib32;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\VulkanSDK\1.2.141.2\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\VulkanSDK\1.2.141.2\Lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Production|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>C:\VulkanSDK\1.2.141.2\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\VulkanSDK\1.2.141.2\Lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -371,20 +391,20 @@
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\boost.1.72.0.0\build\boost.targets" Condition="Exists('..\packages\boost.1.72.0.0\build\boost.targets')" />
-    <Import Project="..\packages\boost_thread-vc142.1.72.0.0\build\boost_thread-vc142.targets" Condition="Exists('..\packages\boost_thread-vc142.1.72.0.0\build\boost_thread-vc142.targets')" />
-    <Import Project="..\packages\boost_date_time-vc142.1.72.0.0\build\boost_date_time-vc142.targets" Condition="Exists('..\packages\boost_date_time-vc142.1.72.0.0\build\boost_date_time-vc142.targets')" />
-    <Import Project="..\packages\boost_chrono-vc142.1.72.0.0\build\boost_chrono-vc142.targets" Condition="Exists('..\packages\boost_chrono-vc142.1.72.0.0\build\boost_chrono-vc142.targets')" />
-    <Import Project="..\packages\boost_atomic-vc142.1.72.0.0\build\boost_atomic-vc142.targets" Condition="Exists('..\packages\boost_atomic-vc142.1.72.0.0\build\boost_atomic-vc142.targets')" />
+    <Import Project="..\packages\boost.1.75.0.0\build\boost.targets" Condition="Exists('..\packages\boost.1.75.0.0\build\boost.targets')" />
+    <Import Project="..\packages\boost_atomic-vc142.1.75.0.0\build\boost_atomic-vc142.targets" Condition="Exists('..\packages\boost_atomic-vc142.1.75.0.0\build\boost_atomic-vc142.targets')" />
+    <Import Project="..\packages\boost_chrono-vc142.1.75.0.0\build\boost_chrono-vc142.targets" Condition="Exists('..\packages\boost_chrono-vc142.1.75.0.0\build\boost_chrono-vc142.targets')" />
+    <Import Project="..\packages\boost_date_time-vc142.1.75.0.0\build\boost_date_time-vc142.targets" Condition="Exists('..\packages\boost_date_time-vc142.1.75.0.0\build\boost_date_time-vc142.targets')" />
+    <Import Project="..\packages\boost_thread-vc142.1.75.0.0\build\boost_thread-vc142.targets" Condition="Exists('..\packages\boost_thread-vc142.1.75.0.0\build\boost_thread-vc142.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\boost.1.72.0.0\build\boost.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost.1.72.0.0\build\boost.targets'))" />
-    <Error Condition="!Exists('..\packages\boost_thread-vc142.1.72.0.0\build\boost_thread-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_thread-vc142.1.72.0.0\build\boost_thread-vc142.targets'))" />
-    <Error Condition="!Exists('..\packages\boost_date_time-vc142.1.72.0.0\build\boost_date_time-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_date_time-vc142.1.72.0.0\build\boost_date_time-vc142.targets'))" />
-    <Error Condition="!Exists('..\packages\boost_chrono-vc142.1.72.0.0\build\boost_chrono-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_chrono-vc142.1.72.0.0\build\boost_chrono-vc142.targets'))" />
-    <Error Condition="!Exists('..\packages\boost_atomic-vc142.1.72.0.0\build\boost_atomic-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_atomic-vc142.1.72.0.0\build\boost_atomic-vc142.targets'))" />
+    <Error Condition="!Exists('..\packages\boost.1.75.0.0\build\boost.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost.1.75.0.0\build\boost.targets'))" />
+    <Error Condition="!Exists('..\packages\boost_atomic-vc142.1.75.0.0\build\boost_atomic-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_atomic-vc142.1.75.0.0\build\boost_atomic-vc142.targets'))" />
+    <Error Condition="!Exists('..\packages\boost_chrono-vc142.1.75.0.0\build\boost_chrono-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_chrono-vc142.1.75.0.0\build\boost_chrono-vc142.targets'))" />
+    <Error Condition="!Exists('..\packages\boost_date_time-vc142.1.75.0.0\build\boost_date_time-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_date_time-vc142.1.75.0.0\build\boost_date_time-vc142.targets'))" />
+    <Error Condition="!Exists('..\packages\boost_thread-vc142.1.75.0.0\build\boost_thread-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_thread-vc142.1.75.0.0\build\boost_thread-vc142.targets'))" />
   </Target>
 </Project>

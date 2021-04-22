@@ -7,17 +7,27 @@
 
 #pragma once
 
-#include "Vector.hpp"
+#include "Rotator.hpp"
+#include "Matrix.hpp"
+#include "Vector3.hpp"
 
 namespace Re
 {
 	namespace Math
 	{
-		struct NTransform
+		struct Transform
 		{
-			NVector Position;
-			float Rotation;
-			NVector Scale;
+			Rotator _rotation;
+			Vector3 _position;
+			Vector3 _scale;
+
+		public:
+			Vector3 Forward() const;
+			Vector3 Right() const;
+			Vector3 Up() const;
+
+			Matrix ToModel() const;
+
 		};
 	}
 }

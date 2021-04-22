@@ -17,7 +17,7 @@ namespace Re
 {
 	namespace Core 
 	{
-		/* 
+		/** 
 		 * @brief This class represents the Game, holding it's main functions for
 		 * starting, drawing, updating and etc. 
 		 *

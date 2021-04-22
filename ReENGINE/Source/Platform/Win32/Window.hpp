@@ -11,8 +11,14 @@
 #pragma once
 
 #include "Core/Debug/Assert.hpp"
+#include "Core/Input.hpp"
 
-namespace Re 
+#include <boost/signals2.hpp>
+
+#define RELEASE 0
+#define PRESS 1
+
+namespace Re
 {
 	namespace Platform
 	{
@@ -38,15 +44,23 @@ namespace Re
 			i32			_height;
 			bool		_shouldClose;
 
+			i32			_prevMouseX;
+			i32			_prevMouseY;
+			bool		_firstMouse;
+
+		public:
+			boost::signals2::signal<void(Core::Input::Action, Core::Input::Keys)> KeyEvent;
+			boost::signals2::signal<void(i32, i32)> MouseEvent;
+
 		public:
 			/*
 			 * @brief This constructor initializes the object's parameters to the
 			 * passed in values.
-			 *
-
-			 *
+			 * 
 			 */
 			Win32Window();
+
+			~Win32Window();
 
 			/*
 			 * @brief This method registers and initializes a window with Windows.
@@ -59,7 +73,7 @@ namespace Re
 			 * @return true if window is created successfully, false otherwise.
 			 *
 			 */
-			WindowResult Startup(LPCSTR title, i32 width, i32 height, i32 nCmdShow);
+			WindowResult Startup(LPCSTR title, i32 width, i32 height, i32 nCmdShow, bool captureMouse = true);
 
 			void Shutdown();
 

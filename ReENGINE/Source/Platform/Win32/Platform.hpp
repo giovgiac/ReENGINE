@@ -15,6 +15,7 @@
 #include <typeinfo>
 #include <typeindex>
 #include <Windows.h>
+#include <windowsx.h>
 
 /* Get rid of Windows useless macros. */
 

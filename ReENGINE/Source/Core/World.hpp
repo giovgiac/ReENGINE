@@ -10,6 +10,10 @@
 #include "Core/Entity.hpp"
 #include "Core/Result.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Entities/Camera.hpp"
+#include "Entities/DirectionalLight.hpp"
+#include "Entities/PointLight.hpp"
+#include "Entities/SpotLight.hpp"
 
 #include "Platform/Win32/Window.hpp"
 #include "Platform/Win32/Timer.hpp"
@@ -35,14 +39,26 @@ namespace Re
 
 		class World
 		{
+		private:
+			void AddEntity(const boost::shared_ptr<Core::Entity>& entity);
+			void AddEntity(const boost::shared_ptr<Entities::Camera>& camera);
+			void AddEntity(const boost::shared_ptr<Entities::DirectionalLight>& light);
+			void AddEntity(const boost::shared_ptr<Entities::PointLight>& light);
+			void AddEntity(const boost::shared_ptr<Entities::SpotLight>& light);
+
+			void DispatchToRenderer();
+			void JoinDispatchThreads();
+
 		public:
 			World();
 
 			WorldResult Startup();
 			void Shutdown();
 			void Loop();
+			void Update();
 
 			INLINE const Graphics::Renderer& GetRenderer() const { return _renderer; }
+			INLINE Platform::Win32Window& GetWindow() { return _window; }
 
 			template <typename EntityType, typename... EntityArgs>
 			boost::shared_ptr<EntityType> SpawnEntity(EntityArgs&&... args)
@@ -53,8 +69,7 @@ namespace Re
 				_entities.emplace(&typeid(EntityType), newEntity);
 				newEntity->_owner = this;
 				newEntity->Initialize();
-				_dispatchQueue.push(newEntity.get());
-				_shouldDispatch.notify_one();
+				AddEntity(newEntity);
 				return newEntity;
 			}
 
@@ -68,10 +83,6 @@ namespace Re
 					boost::make_transform_iterator(_entities.upper_bound(&typeid(EntityType)), f)
 				);
 			}
-
-		private:
-			void DispatchToRenderer();
-			void JoinDispatchThreads();
 
 		private:
 			boost::lockfree::queue<Entity*> _dispatchQueue;

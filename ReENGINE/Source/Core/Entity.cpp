@@ -28,12 +28,17 @@ namespace Re
 
 		void Entity::Initialize()
 		{
+			for (auto& component : _components)
+			{
+				component.second->Initialize();
+			}
+
 			//Debug::Log(NTEXT("Entity initialized!\n"));
 		}
 
 		void Entity::Update(float DeltaTime)
 		{
-			for (const auto& component : _components)
+			for (auto& component : _components)
 			{
 				component.second->Update(DeltaTime);
 			}

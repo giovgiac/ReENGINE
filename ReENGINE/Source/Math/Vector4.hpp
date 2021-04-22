@@ -18,7 +18,7 @@ namespace Re
 		 * the coordinates.
 		 *
 		 */
-		struct NVector4 
+		struct Vector4 
 		{
 			f32 X;
 			f32 Y;
@@ -26,23 +26,19 @@ namespace Re
 			f32 W;
 
 			/**
-			 * NVector4 Constructor
-			 *
-			 * This default constructor initializes the vector to the zero vector.
+			 * @brief This default constructor initializes the vector to the zero vector.
 			 *
 			 */
-			inline NVector4(void)
+			inline Vector4(void)
 				: X(0.0f), Y(0.0f), Z(0.0f), W(0.0f) {}
 
 			/**
-			 * NVector4 Constructor
-			 *
-			 * This constructor initializes all coordinates in the vector with the same given floating-point value.
+			 * @brief This constructor initializes all coordinates in the vector with the same given floating-point value.
 			 *
 			 * @param f32 InF: The value to fill the coordinates with.
 			 *
 			 */
-			explicit inline NVector4(f32 InF)
+			explicit inline Vector4(f32 InF)
 				: X(InF), Y(InF), Z(InF), W(InF) {}
 
 			/*
@@ -54,7 +50,7 @@ namespace Re
 			 * @param InW: the value of the W coordinate.
 			 *
 			 */
-			explicit inline NVector4(f32 InX, f32 InY, f32 InZ, f32 InW)
+			explicit inline Vector4(f32 InX, f32 InY, f32 InZ, f32 InW)
 				: X(InX), Y(InY), Z(InZ), W(InW) {}
 		};
 	}

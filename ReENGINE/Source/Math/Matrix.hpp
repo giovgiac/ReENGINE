@@ -20,11 +20,11 @@ namespace Re
 		 * @brief This data type holds a 4x4 Matrix in column-major ordering and using as values floating-point numbers.
 		 *
 		 */
-		struct NMatrix
+		struct Matrix
 		{
 			union 
 			{
-				NVector4 Columns[4];
+				Vector4 Columns[4];
 				f32 Elements[16];
 				f32 Transpose[4][4];
 			};
@@ -33,7 +33,7 @@ namespace Re
 			 * @brief This default constructor initializes a matrix with all entries holding zero.
 			 *
 			 */
-			NMatrix();
+			Matrix();
 
 			/*
 			 * @brief This constructor initializes a matrix with the main diagonal holding the given value and everywhere else
@@ -42,7 +42,7 @@ namespace Re
 			 * @param InDiagonal: the value of the main diagonal entries.
 			 *
 			 */
-			explicit NMatrix(f32 InDiagonal);
+			explicit Matrix(f32 InDiagonal);
 
 			/*
 			 * @brief This method multiplies the current matrix by another given matrix.
@@ -52,7 +52,7 @@ namespace Re
 			 * @return a reference to the current matrix.
 			 *
 			 */
-			NMatrix Multiply(const NMatrix& InOther);
+			Matrix Multiply(const Matrix& InOther);
 
 			/*
 			 * @brief This static method initializes a matrix with the main diagonal holding one and everywhere else
@@ -61,7 +61,7 @@ namespace Re
 			 * @return a initialized identity matrix.
 			 *
 			 */
-			static NMatrix Identity(void);
+			static Matrix Identity(void);
 
 			/*
 			 * @brief This static method initializes a projection matrix of type Orthographic given the clip values.
@@ -76,14 +76,14 @@ namespace Re
 			 * @return a initialized orthographic projection matrix.
 			 *
 			 */
-			static NMatrix Orthographic(f32 InLeft, f32 InRight, f32 InBottom, f32 InTop, f32 InNear, f32 InFar);
+			static Matrix Orthographic(f32 InLeft, f32 InRight, f32 InBottom, f32 InTop, f32 InNear, f32 InFar);
 
-			static NMatrix Perspective(f32 AspectRatio, f32 FoV, f32 Near, f32 Far);
+			static Matrix Perspective(f32 AspectRatio, f32 FoV, f32 Near, f32 Far);
 
 			/*
 			 *
 			 */
-			static NMatrix LookAt(NVector3 Eye, NVector3 Center, NVector3 Up);
+			static Matrix LookAt(const Vector3& Eye, const Vector3& Center, const Vector3& Up);
 
 			/*
 			 * @brief This static method initializes a rotation matrix given the angle and axis of rotation.
@@ -94,7 +94,7 @@ namespace Re
 			 * @return a initialized rotation matrix.
 			 *
 			 */
-			static NMatrix Rotation(f32 InAngle, const NVector3& InAxis);
+			static Matrix Rotation(f32 InAngle, const Vector3& InAxis);
 
 			/*
 			 * @brief This static method initializes a scale matrix given the values to scale each component by.
@@ -104,7 +104,7 @@ namespace Re
 			 * @return a initialized scaling matrix.
 			 *
 			 */
-			static NMatrix Scale(const NVector3& InScale);
+			static Matrix Scale(const Vector3& InScale);
 
 			/*
 			 * @brief This static method initializes a translation matrix given the values to move each component by.
@@ -114,10 +114,10 @@ namespace Re
 			 * @return a initialized translation matrix.
 			 *
 			 */
-			static NMatrix Translation(const NVector3& InTranslation);
+			static Matrix Translation(const Vector3& InTranslation);
 
-			INLINE NMatrix& operator*=(const NMatrix& InOther);
-			friend NMatrix operator*(NMatrix InLeft, const NMatrix& InRight);
+			INLINE Matrix& operator*=(const Matrix& InOther);
+			friend Matrix operator*(Matrix InLeft, const Matrix& InRight);
 		};
 	}
 }

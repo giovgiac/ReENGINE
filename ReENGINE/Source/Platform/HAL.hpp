@@ -81,14 +81,15 @@ typedef Re::utf32		utf32;
 typedef Re::NRESULT		NRESULT;
 
 /* Assert Type Size */
-static_assert(sizeof(u8) == 1, "Invalid byte size for u8.");
-static_assert(sizeof(u16) == 2, "Invalid byte size for u16.");
-static_assert(sizeof(u32) == 4, "Invalid byte size for u32.");
-static_assert(sizeof(u64) == 8, "Invalid byte size for u64.");
-static_assert(sizeof(i16) == 2, "Invalid byte size for i16.");
-static_assert(sizeof(i32) == 4, "Invalid byte size for i32.");
-static_assert(sizeof(i64) == 8, "Invalid byte size for i64.");
-static_assert(sizeof(f32) == 4, "Invalid byte size for f32.");
-static_assert(sizeof(f64) == 8, "Invalid byte size for f64.");
-static_assert(sizeof(utf8) == 1, "Invalid byte size for utf8.");
-static_assert(sizeof(utf32) == 4, "Invalid byte size for utf32.");
+static_assert(sizeof(u8) == 1, "Invalid byte size for u8, should be 1 byte.");
+static_assert(sizeof(u16) == 2, "Invalid byte size for u16, should be 2 bytes.");
+static_assert(sizeof(u32) == 4, "Invalid byte size for u32, should be 4 bytes.");
+static_assert(sizeof(u64) == 8, "Invalid byte size for u64, should be 8 bytes.");
+static_assert(sizeof(i8) == 1, "Invalid byte size for i8, should be 1 byte.");
+static_assert(sizeof(i16) == 2, "Invalid byte size for i16, should be 2 bytes.");
+static_assert(sizeof(i32) == 4, "Invalid byte size for i32, should be 4 bytes.");
+static_assert(sizeof(i64) == 8, "Invalid byte size for i64, should be 8 bytes.");
+static_assert(sizeof(f32) == 4, "Invalid byte size for f32, should be 4 bytes.");
+static_assert(sizeof(f64) == 8, "Invalid byte size for f64, should be 8 bytes.");
+static_assert(sizeof(utf8) == 1, "Invalid byte size for utf8, should be 1 byte.");
+static_assert(sizeof(utf32) == 4, "Invalid byte size for utf32, should be 4 bytes.");

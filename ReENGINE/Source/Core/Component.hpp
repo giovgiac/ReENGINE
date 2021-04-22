@@ -18,14 +18,15 @@ namespace Re
 			friend class Entity;
 
 		public:
+			virtual ~Component() = default;
 			virtual void Initialize() = 0;
 			virtual void Update(f32 DeltaTime) = 0;
 
 		protected:
-			INLINE Entity* GetOwner() const { return _owner; }
+			INLINE Entity* GetOwner() const { return Owner; }
 
 		private:
-			Entity* _owner;
+			Entity* Owner;
 
 		};
 	}

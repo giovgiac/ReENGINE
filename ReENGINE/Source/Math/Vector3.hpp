@@ -13,102 +13,86 @@ namespace Re
 {
 	namespace Math
 	{
-		/*
+		/**
 		 * @brief This data type is for holding a vector in 3-D space. It uses floating-point numbers for 
 		 * the coordinates.
 		 *
 		 */
-		struct NVector3 
+		struct Vector3 
 		{
 			f32 X;
 			f32 Y;
 			f32 Z;
 
 			/**
-			 * NVector3 Constructor
-			 *
-			 * This default constructor initializes the vector to the zero vector.
+			 * @brief This default constructor initializes the vector to the zero vector.
 			 *
 			 */
-			inline NVector3()
+			inline Vector3()
 				: X(0.0f), Y(0.0f), Z(0.0f) {}
 
 			/**
-			 * NVector3 Constructor
-			 *
-			 * This constructor initializes the coordinates of the vector to the same given floating-point number.
+			 * @brief This constructor initializes the coordinates of the vector to the same given floating-point number.
 			 *
 			 * @param f32 InF: The value to initialize the coordinates with.
 			 *
 			 */
-			explicit inline NVector3(f32 InF)
+			explicit inline Vector3(f32 InF)
 				: X(InF), Y(InF), Z(InF) {}
 
 			/**
-			 * NVector3 Constructor
-			 *
-			 * This constructor initializes the coordinates of the vector to the given floating-point numbers.
+			 * @brief This constructor initializes the coordinates of the vector to the given floating-point numbers.
 			 *
 			 * @param f32 InX: The value of the X coordinate.
 			 * @param f32 InY: The value of the Y coordinate.
 			 * @param f32 InZ: The value of the Z coordinate.
 			 *
 			 */
-			explicit inline NVector3(f32 InX, f32 InY, f32 InZ)
+			explicit inline Vector3(f32 InX, f32 InY, f32 InZ)
 				: X(InX), Y(InY), Z(InZ) {}
 
 			/**
-			 * NVector3 Add
+			 * @brief This method adds two vectors together.
 			 *
-			 * This method adds two vectors together.
+			 * @param const Vector3& InOther: The vector to add.
 			 *
-			 * @param const NVector3& InOther: The vector to add.
-			 *
-			 * @return NVector3&: A reference to self.
+			 * @return Vector3&: A reference to self.
 			 *
 			 */
-			NVector3 Add(const NVector3& InOther);
+			Vector3& Add(const Vector3& InOther);
 
 			/**
-			 * NVector3 Cross
+			 * @brief This method does a vector-to-vector product between two vectors.
 			 *
-			 * This method does a vector-to-vector product between two vectors.
+			 * @param const Vector3& InOther: The vector to cross-product with.
 			 *
-			 * @param const NVector3& InOther: The vector to cross-product with.
-			 *
-			 * @return NVector3&: A reference to self.
+			 * @return Vector3&: A reference to self.
 			 *
 			 */
-			NVector3 Cross(const NVector3& InOther);
+			Vector3& Cross(const Vector3& InOther);
 
 			/**
-			 * NVector3 Divide
-			 *
-			 * This method divides a vector by a scalar.
+			 * @brief This method divides a vector by a scalar.
 			 *
 			 * @param const f32 InScalar: The scalar to divide the vector by.
 			 *
-			 * @return NVector3&: A reference to self.
+			 * @return Vector3&: A reference to self.
 			 *
 			 */
-			NVector3 Divide(const f32 InScalar);
+			Vector3& Divide(const f32 InScalar);
 
 			/**
-			 * NVector3 Dot
+			 * @brief This method does a scalar product between two vectors.
 			 *
-			 * This method does a scalar product between two vectors.
-			 *
-			 * @param const NVector3& InOther: The vector to dot-product with.
+			 * @param const Vector3& InOther: The vector to dot-product with.
 			 *
 			 * @return f32: The result of the dot product.
 			 *
 			 */
-			f32 Dot(const NVector3& InOther) const;
+			f32 Dot(const Vector3& InOther) const;
 
 			/**
-			 * NVector3 Length
-			 *
-			 * This method calculates the length of the vector.
+			 * @brief This method calculates the length of the vector.
 			 *
 			 * @return f32: The magnitude of the vector.
 			 *
@@ -116,61 +100,60 @@ namespace Re
 			f32 Length() const;
 
 			/**
-			 * NVector3 Multiply
-			 *
-			 * This method multiplies a vector by a given scalar.
+			 * @brief This method multiplies a vector by a given scalar.
 			 *
 			 * @param const f32 InScalar: The scalar to multiply the vector by.
 			 *
-			 * @return NVector3&: A reference to self.
+			 * @return Vector3&: A reference to self.
 			 *
 			 */
-			NVector3 Multiply(const f32 InScalar);
+			Vector3& Multiply(const f32 InScalar);
 
 			/**
-			 * NVector3 Normalize
+			 * @brief This method normalizes the vector by dividing through by it's length.
 			 *
-			 * This method normalizes the vector by dividing through by it's length.
-			 *
-			 * @return NVector3&: A reference to self.
+			 * @return Vector3&: A reference to self.
 			 *
 			 */
-			NVector3 Normalize();
+			Vector3& Normalize();
 
 			/**
-			 * NVector3 Subtract
+			 * @brief This method subtracts a vector by another.
 			 *
-			 * This method subtracts a vector by another.
+			 * @param const Vector3& InOther: The vector to subtract by.
 			 *
-			 * @param const NVector3& InOther: The vector to subtract by.
-			 *
-			 * @return NVector3&: A reference to self.
+			 * @return Vector3&: A reference to self.
 			 *
 			 */
-			NVector3 Subtract(const NVector3& InOther);
+			Vector3& Subtract(const Vector3& InOther);
 
 			/**
-			 * NVector3 Cross
+			 * @brief This method statically does the cross-product between two given vectors.
 			 *
-			 * This method statically does the cross-product between two given vectors.
+			 * @param const Vector3& InLeft: The left vector of the operation.
+			 * @param const Vector3& InRight: The right vector of the operation.
 			 *
-			 * @param const NVector3& InLeft: The left vector of the operation.
-			 * @param const NVector3& InRight: The right vector of the operation.
-			 *
-			 * @return NVector3: A copy of the resulting vector.
+			 * @return Vector3: A copy of the resulting vector.
 			 *
 			 */
-			static NVector3 Cross(const NVector3& InLeft, const NVector3& InRight);
+			static Vector3 Cross(const Vector3& InLeft, const Vector3& InRight);
 
-			NVector3& operator+=(const NVector3& InOther);
-			NVector3& operator-=(const NVector3& InOther);
-			NVector3& operator*=(const f32 InScalar);
-			NVector3& operator/=(const f32 InScalar);
+			Vector3& operator+=(const Vector3& InOther);
+			Vector3& operator-=(const Vector3& InOther);
+			Vector3& operator*=(const f32 InScalar);
+			Vector3& operator/=(const f32 InScalar);
 
-			friend NVector3 operator+(NVector3 InLeft, const NVector3& InRight);
-			friend NVector3 operator-(NVector3 InLeft, const NVector3& InRight);
-			friend NVector3 operator*(NVector3 InVector, const f32 InScalar);
-			friend NVector3 operator/(NVector3 InVector, const f32 InScalar);
+			bool operator==(const Vector3& InOther);
+			bool operator!=(const Vector3& InOther);
+
+			Vector3 operator-() const;
+
+			friend Vector3 operator+(Vector3 InLeft, const Vector3& InRight);
+			friend Vector3 operator-(Vector3 InLeft, const Vector3& InRight);
+			friend Vector3 operator*(Vector3 InVector, const f32 InScalar);
+			friend Vector3 operator/(Vector3 InVector, const f32 InScalar);
 		};
+
+		const Vector3 WorldUp(0.0f, 1.0f, 0.0f);
 	}
 }

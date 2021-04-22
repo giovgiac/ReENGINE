@@ -14,7 +14,7 @@
 
 using namespace Re::Core;
 
-void ReportAssertFailure(const utf8* pExpression, const utf8* pFile, u32 line) 
+void ReportAssertFailure(const utf8* pExpression, const utf8* pFile, const u32 line) 
 {
 	Debug::Log(NTEXT("ASSERT FAILURE: (%s) at file %s in line %d\n"), pExpression, pFile, line);
 }
