@@ -44,5 +44,23 @@ namespace Re
         {
             return _diffuseStrength;
         }
+
+        void Light::SetColor(Math::Color lightColor)
+        {
+            _color = lightColor;
+            OnParameterChanged();
+        }
+
+        void Light::SetAmbientStrength(f32 ambientStrength)
+        {
+            _ambientStrength = ambientStrength;
+            OnParameterChanged();
+        }
+
+        void Light::SetDiffuseStrength(f32 diffuseStrength)
+        {
+            _diffuseStrength = diffuseStrength;
+            OnParameterChanged();
+        }
     }
 }

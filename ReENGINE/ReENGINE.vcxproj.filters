@@ -96,6 +96,8 @@
     <ClCompile Include="Source\Entities\DirectionalLight.cpp" />
     <ClCompile Include="Source\Entities\PointLight.cpp" />
     <ClCompile Include="Source\Entities\SpotLight.cpp" />
+    <ClCompile Include="Source\Graphics\Texture.cpp" />
+    <ClCompile Include="Source\Entities\Mesh.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Core\NewtonManager.hpp">
@@ -170,6 +172,8 @@
     <ClInclude Include="Source\Entities\DirectionalLight.hpp" />
     <ClInclude Include="Source\Entities\PointLight.hpp" />
     <ClInclude Include="Source\Entities\SpotLight.hpp" />
+    <ClInclude Include="Source\Graphics\Texture.hpp" />
+    <ClInclude Include="Source\Entities\Mesh.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Shaders\default.vert" />
@@ -178,5 +182,10 @@
     <None Include="Shaders\frag.spv" />
     <None Include="Shaders\vert.spv" />
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Textures\brick.png" />
+    <Image Include="Textures\dirt.png" />
+    <Image Include="Textures\giraffe.jpg" />
   </ItemGroup>
 </Project>

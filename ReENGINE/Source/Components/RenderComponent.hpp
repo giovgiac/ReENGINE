@@ -21,7 +21,7 @@ namespace Re
         class RenderComponent : public Core::Component
         {
         public:
-            explicit RenderComponent(boost::container::vector<Graphics::Vertex>& vertices, boost::container::vector<u32>& indices, const boost::shared_ptr<Graphics::Material>& material = boost::make_shared<Graphics::Material>());
+            explicit RenderComponent(boost::container::vector<Graphics::Vertex>& vertices, boost::container::vector<u32>& indices, const boost::shared_ptr<Graphics::Material>& material = nullptr);
 
             virtual void Initialize() override;
             virtual void Update(f32 deltaTime) override;

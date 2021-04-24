@@ -86,9 +86,7 @@ namespace Re
 	namespace Graphics
 	{
 		Renderer::Renderer()
-			: _currentBuffer(0), _currentFrame(0), _streamingQueue(128), _streamingThreadShouldClose(false),
-			_indexStagingBuffer(VK_NULL_HANDLE), _vertexStagingBuffer(VK_NULL_HANDLE), 
-			_indexStagingMemory(VK_NULL_HANDLE), _vertexStagingMemory(VK_NULL_HANDLE)
+			: _currentFrame(0), _streamingQueue(512), _streamingThreadShouldClose(false), _releasedImages(512)
 		{}
 
 		bool Renderer::AddEntity(Core::Entity* entity)
@@ -122,12 +120,9 @@ namespace Re
 			// Get next image to render to (and signal when succeeded).
 			u32 imageIndex;
 			CHECK_RESULT(vkAcquireNextImageKHR(_device._logical, _swapchain, -1, _imageAvailable[_currentFrame], VK_NULL_HANDLE, &imageIndex), VK_SUCCESS, RendererResult::Failure)
-			
-			// Load the value of the current set of command buffers to use.
-			usize current = _currentBuffer.load();
 
 			// Re-write the command buffers to update values, if not already rerecording.
-			CHECK_RESULT(RecordCommands(current, imageIndex, 1), RendererResult::Success, RendererResult::Failure);
+			CHECK_RESULT(RecordCommands(imageIndex, 1), RendererResult::Success, RendererResult::Failure);
 
 			// Define stages that we need to wait for semaphores.
 			VkPipelineStageFlags waitStages[] = {
@@ -141,7 +136,7 @@ namespace Re
 			submitInfo.pWaitSemaphores = &_imageAvailable[_currentFrame];
 			submitInfo.pWaitDstStageMask = waitStages;
 			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &_commandBuffers[current][imageIndex];
+			submitInfo.pCommandBuffers = &_commandBuffers[imageIndex];
 			submitInfo.signalSemaphoreCount = 1;
 			submitInfo.pSignalSemaphores = &_renderFinished[_currentFrame];
 			
@@ -180,14 +175,15 @@ namespace Re
 			CHECK_RESULT_WITH_ERROR(CreateSwapchain(), RendererResult::Success, NTEXT("Failed to create swapchain!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateDepthBufferImage(), RendererResult::Success, NTEXT("Failed to create depth buffer image!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateRenderPass(), RendererResult::Success, NTEXT("Failed to create renderpass!\n"), RendererResult::Failure)
-			CHECK_RESULT_WITH_ERROR(CreateDescriptorSetLayout(), RendererResult::Success, NTEXT("Failed to create descriptor set layout!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateDescriptorSetLayouts(), RendererResult::Success, NTEXT("Failed to create descriptor set layout!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreatePushConstantRanges(), RendererResult::Success, NTEXT("Failed to create push constant range!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateGraphicsPipeline(), RendererResult::Success, NTEXT("Failed to create graphics pipeline!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateFramebuffers(), RendererResult::Success, NTEXT("Failed to create framebuffers!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateCommandPools(), RendererResult::Success, NTEXT("Failed to create command pools!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateCommandBuffers(), RendererResult::Success, NTEXT("Failed to create command buffers!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateTextureSampler(), RendererResult::Success, NTEXT("Failed to create texture sampler!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateUniformBuffers(), RendererResult::Success, NTEXT("Failed to create uniform buffers!\n"), RendererResult::Failure)
-			CHECK_RESULT_WITH_ERROR(CreateDescriptorPool(), RendererResult::Success, NTEXT("Failed to create descriptor pool!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateDescriptorPools(), RendererResult::Success, NTEXT("Failed to create descriptor pool!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateDescriptorSets(), RendererResult::Success, NTEXT("Failed to create descriptor sets!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateSynchronization(), RendererResult::Success, NTEXT("Failed to create synchronization!\n"), RendererResult::Failure)
 
@@ -210,9 +206,12 @@ namespace Re
 			
 			DestroyEntities();
 			DestroySynchronization();
-			vkDestroyDescriptorPool(_device._logical, _descriptorPool, nullptr);
-			vkDestroyDescriptorSetLayout(_device._logical, _descriptorSetLayout, nullptr);
+			vkDestroyDescriptorPool(_device._logical, _samplerDescriptorPool, nullptr);
+			vkDestroyDescriptorPool(_device._logical, _bufferDescriptorPool, nullptr);
+			vkDestroyDescriptorSetLayout(_device._logical, _samplerDescriptorSetLayout, nullptr);
+			vkDestroyDescriptorSetLayout(_device._logical, _bufferDescriptorSetLayout, nullptr);
 			DestroyUniformBuffers();
+			vkDestroySampler(_device._logical, _textureSampler, nullptr);
 			DestroyCommandPools();
 			DestroyFramebuffers();
 			vkDestroyPipeline(_device._logical, _graphicsPipeline, nullptr);
@@ -230,28 +229,24 @@ namespace Re
 
 		RendererResult Renderer::ActivateLight(const boost::shared_ptr<Entities::DirectionalLight>& light)
 		{
-			// Load current command buffer.
-			usize current = _currentBuffer.load();
-
-			// Retrieve configuration values from the selected light.
-			_fragmentUniform._directionalLight._base._color = light->GetColor();
-			_fragmentUniform._directionalLight._base._ambientStrength = light->GetAmbientStrength();
-			_fragmentUniform._directionalLight._base._diffuseStrength = light->GetDiffuseStrength();
-			_fragmentUniform._directionalLight._direction = light->GetDirection();
+			// Update the fragment uniform with the directional light configuration.
+			UpdateDirectionalLight(&_fragmentUniform._directionalLight, light);
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers(current);
+			UpdateFragmentUniformBuffers();
 
 			// Store specified light as active light.
 			_directionalLight = light;
+			_directionalLight->OnParameterChanged.connect([this]() {
+				UpdateDirectionalLight(&_fragmentUniform._directionalLight, _directionalLight);
+				UpdateFragmentUniformBuffers();
+			});
+
 			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::ActivateLight(const boost::shared_ptr<Entities::PointLight>& light)
 		{
-			// Load current command buffer.
-			usize current = _currentBuffer.load();
-
 			// Update the fragment uniform with the point lights.
 			usize availableIndex = 0;
 			usize lightCount = 0;
@@ -283,18 +278,20 @@ namespace Re
 			_fragmentUniform._pointLightCount = lightCount;
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers(current);
+			UpdateFragmentUniformBuffers();
 
 			// Add new light to the list of point lights.
 			_pointLights[availableIndex] = light;
+			_pointLights[availableIndex]->OnParameterChanged.connect([this, availableIndex]() {
+				UpdatePointLight(&_fragmentUniform._pointLights[availableIndex], _pointLights[availableIndex]);
+				UpdateFragmentUniformBuffers();
+			});
+
 			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::ActivateLight(const boost::shared_ptr<Entities::SpotLight>& light)
 		{
-			// Load current command buffer.
-			usize current = _currentBuffer.load();
-
 			// Update the fragment uniform with the spot lights.
 			usize availableIndex = 0;
 			usize lightCount = 0;
@@ -326,25 +323,20 @@ namespace Re
 			_fragmentUniform._spotLightCount = lightCount;
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers(current);
+			UpdateFragmentUniformBuffers();
 
 			// Add new light to the list of spot lights.
 			_spotLights[availableIndex] = light;
-			_spotLights[availableIndex]->OnParameterChanged.connect([=]() {
-				// Load current command buffer.
-				usize buffer = _currentBuffer.load();
-
+			_spotLights[availableIndex]->OnParameterChanged.connect([this, availableIndex]() {
 				UpdateSpotLight(&_fragmentUniform._spotLights[availableIndex], _spotLights[availableIndex]);
-				UpdateFragmentUniformBuffers(buffer);
+				UpdateFragmentUniformBuffers();
 			});
+
 			return RendererResult::Success;
 		}
 
 		void Renderer::DeactivateLight(const boost::shared_ptr<Entities::PointLight>& light)
 		{
-			// Load current command buffer.
-			usize current = _currentBuffer.load();
-
 			for (usize i = 0; i < _pointLights.size(); ++i)
 			{
 				if (_pointLights[i] == light)
@@ -358,14 +350,11 @@ namespace Re
 			}
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers(current);
+			UpdateFragmentUniformBuffers();
 		}
 
 		void Renderer::DeactivateLight(const boost::shared_ptr<Entities::SpotLight>& light)
 		{
-			// Load current command buffer.
-			usize current = _currentBuffer.load();
-
 			for (usize i = 0; i < _spotLights.size(); ++i)
 			{
 				if (_spotLights[i] == light)
@@ -379,19 +368,16 @@ namespace Re
 			}
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers(current);
+			UpdateFragmentUniformBuffers();
 		}
 
 		void Renderer::SetActiveCamera(const boost::shared_ptr<Entities::Camera>& newCamera)
 		{
-			// Load current command buffer.
-			usize current = _currentBuffer.load();
-
 			// Retrieve projection matrix from the selected camera.
 			_vertexUniform._projection = newCamera->GetProjection(static_cast<f32>(_swapchainExtent.width) / static_cast<f32>(_swapchainExtent.height));
 			
 			// Update the uniform buffer values.
-			UpdateVertexUniformBuffers(current);
+			UpdateVertexUniformBuffers();
 
 			// Store specified camera as active camera.
 			_activeCamera = newCamera;
@@ -399,6 +385,7 @@ namespace Re
 
 		void Renderer::EntityStreaming()
 		{
+			static usize it = 0;
 			while (true)
 			{
 				boost::unique_lock<boost::mutex> lock(_streamingMutex);
@@ -436,6 +423,7 @@ namespace Re
 									// Create required buffers and images for the rendering.
 									CreateIndexBuffer(indices, &renderInfo._indexBuffer);
 									CreateVertexBuffer(vertices, &renderInfo._vertexBuffer);
+									CreateTextureImage(renderInfo._material->GetTexture(), &renderInfo._textureImage);
 
 									// Record the model matrix of the entity.
 									if (transferInfo._entity->HasComponent<Components::TransformComponent>())
@@ -459,6 +447,7 @@ namespace Re
 								// Destroy buffers and images created for the rendering.
 								DestroyBuffer(entity->second._indexBuffer);
 								DestroyBuffer(entity->second._vertexBuffer);
+								DestroyImage(entity->second._textureImage);
 
 								_entitiesToRender.erase(entity);
 							}
@@ -466,7 +455,10 @@ namespace Re
 					}
 
 					// Execute pending transfer operations.
-					ExecuteTransferOperations();
+					if (ExecuteTransferOperations() == RendererResult::Failure)
+					{
+						Core::Debug::Error("Failed to execute transfer operations.");
+					}
 				}
 			}
 		}
@@ -641,9 +633,9 @@ namespace Re
 			return info;
 		}
 
-		usize Renderer::GetUniformAlignment(usize dataSize) const
+		usize Renderer::GetAlignedSize(usize dataSize, usize dataAlignment) const
 		{
-			return (dataSize + _minUniformBufferAlignment - 1) & ~(_minUniformBufferAlignment - 1);
+			return (dataSize + dataAlignment - 1) & ~(dataAlignment - 1);
 		}
 
 		RendererResult Renderer::AllocateBuffer(VkBuffer buffer, VkMemoryPropertyFlags properties, VkDeviceMemory* outMemory)
@@ -799,6 +791,120 @@ namespace Re
 			return RendererResult::Success;
 		}
 
+		RendererResult Renderer::CreateTextureImage(Texture* texture, VkImage* outImage)
+		{
+			if (!outImage) return RendererResult::Failure;
+
+			if (_textureImage.contains(texture))
+			{
+				*outImage = _textureImage[texture];
+				_textureReferences[*outImage] += 1;
+				return RendererResult::Success;
+			}
+			else
+			{
+				// Load texture into memory.
+				texture->Load();
+
+				// Calculate image size.
+				VkDeviceSize size = sizeof(u8) * texture->GetPixels().size();
+				CHECK_RESULT(CreateImage(texture->GetWidth(), texture->GetHeight(), VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, outImage), RendererResult::Success, RendererResult::Failure)
+
+				// Create texture information to be able to transfer.
+				TextureInfo textureInfo = {};
+				textureInfo._image = *outImage;
+				textureInfo._size = 0;
+				textureInfo._width = texture->GetWidth();
+				textureInfo._height = texture->GetHeight();
+				textureInfo._pixels = texture->GetPixels();
+
+				// Unload texture from memory.
+				texture->Unload();
+
+				_textureImage.emplace_unique(texture, *outImage);
+				_textureReferences.emplace_unique(*outImage, 1);
+				_textureImagesToTransfer.emplace_back(textureInfo);
+			}
+			
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateTextureImageView(VkImage image)
+		{
+			if (_textureImageView.contains(image)) return RendererResult::Success;
+
+			// Create and store the image view for the given image.
+			VkImageView imageView;
+			CHECK_RESULT(CreateImageView(image, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, &imageView), RendererResult::Success, RendererResult::Failure)
+			
+			// Save the image view in the map and return successfully.
+			_textureImageView.emplace_unique(image, imageView);
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::CreateTextureDescriptorSets()
+		{
+			// Verify images that require new descriptor sets.
+			usize setCount = 0;
+			for (const auto& tInfo : _textureImagesToTransfer)
+			{
+				if (!_textureDescriptorSets.contains(tInfo._image))
+					setCount++;
+			}
+
+			if (setCount <= 0) return RendererResult::Success;
+
+			boost::container::vector<VkDescriptorSet> descriptorSets;
+			boost::container::vector<VkDescriptorSetLayout> setLayouts(setCount, _samplerDescriptorSetLayout);
+
+			// Resize descriptor sets vector to fit.
+			descriptorSets.resize(setCount);
+
+			// Descriptor set allocation information.
+			VkDescriptorSetAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocateInfo.descriptorPool = _samplerDescriptorPool;
+			allocateInfo.descriptorSetCount = setCount;
+			allocateInfo.pSetLayouts = setLayouts.data();
+
+			CHECK_RESULT(vkAllocateDescriptorSets(_device._logical, &allocateInfo, descriptorSets.data()), VK_SUCCESS, RendererResult::Failure);
+
+			boost::container::vector<VkDescriptorImageInfo> descriptorInfos;
+			boost::container::vector<VkWriteDescriptorSet> descriptorWrites;
+
+			// Resize structures to fit all images and descriptors.
+			descriptorInfos.resize(setCount);
+			descriptorWrites.resize(setCount);
+
+			// Add descriptor sets to texture images, and generate their write structures.
+			usize i = 0;
+			for (const auto& tInfo : _textureImagesToTransfer)
+			{
+				if (_textureDescriptorSets.contains(tInfo._image)) continue;
+
+				// Fill in the descriptor image information.
+				descriptorInfos[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				descriptorInfos[i].imageView = _textureImageView[tInfo._image];
+				descriptorInfos[i].sampler = _textureSampler;
+
+				// Fill in the descriptor write structure.
+				descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[i].dstSet = descriptorSets[i];
+				descriptorWrites[i].dstBinding = 0;
+				descriptorWrites[i].dstArrayElement = 0;
+				descriptorWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[i].descriptorCount = 1;
+				descriptorWrites[i].pImageInfo = &descriptorInfos[i];
+
+				// Associate the descriptor set with the image in the map structure.
+				_textureDescriptorSets.emplace_unique(tInfo._image, descriptorSets[i]);
+				i++;
+			}
+
+			vkUpdateDescriptorSets(_device._logical, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+			return RendererResult::Success;
+		}
+
 		void Renderer::DestroyBuffer(VkBuffer buffer)
 		{
 			if (_bufferMemory.left.find(buffer) != _bufferMemory.left.end())
@@ -822,18 +928,67 @@ namespace Re
 			}
 		}
 
-		void Renderer::CleanStageBuffers()
+		void Renderer::DestroyImage(VkImage image)
 		{
-			if (_indexStagingBuffer && _indexStagingMemory)
+			if (_imageMemory.left.find(image) != _imageMemory.left.end())
 			{
-				vkDestroyBuffer(_device._logical, _indexStagingBuffer, nullptr);
-				vkFreeMemory(_device._logical, _indexStagingMemory, nullptr);
-			}
+				if (_textureReferences.contains(image) && _textureReferences[image] <= 1)
+				{
+					VkDeviceMemory memory = _imageMemory.left.at(image);
+					usize distance = std::distance(_imageMemory.right.lower_bound(memory), _imageMemory.right.upper_bound(memory));
 
-			if (_vertexStagingBuffer && _vertexStagingMemory)
+					// Free the descriptor set.
+					if (_textureDescriptorSets.contains(image))
+						vkFreeDescriptorSets(_device._logical, _samplerDescriptorPool, 1, &_textureDescriptorSets[image]);
+
+					// Destroy the image view.
+					if (_textureImageView.contains(image))
+						vkDestroyImageView(_device._logical, _textureImageView[image], nullptr);
+
+					// Destroy the image and remove it from references.
+					vkDestroyImage(_device._logical, image, nullptr);
+					_imageMemory.left.erase(image);
+					_textureReferences.erase(image);
+
+					// Free the image memory.
+					if (distance <= 1)
+					{
+						vkFreeMemory(_device._logical, memory, nullptr);
+						_imageMemory.right.erase(memory);
+					}
+				}
+				else
+				{
+					if (_textureReferences.contains(image))
+					{
+						_textureReferences[image]--;
+					}
+				}
+			}
+			else
 			{
-				vkDestroyBuffer(_device._logical, _vertexStagingBuffer, nullptr);
-				vkFreeMemory(_device._logical, _vertexStagingMemory, nullptr);
+				if (_textureReferences.contains(image) && _textureReferences[image] <= 1)
+				{
+					// Free the descriptor set.
+					if (_textureDescriptorSets.contains(image))
+						vkFreeDescriptorSets(_device._logical, _samplerDescriptorPool, 1, &_textureDescriptorSets[image]);
+
+					// Destroy the image view.
+					if (_textureImageView.contains(image))
+						vkDestroyImageView(_device._logical, _textureImageView[image], nullptr);
+
+					// Destroy the image and remove it from references.
+					vkDestroyImage(_device._logical, image, nullptr);
+					_imageMemory.left.erase(image);
+					_textureReferences.erase(image);
+				}
+				else
+				{
+					if (_textureReferences.contains(image))
+					{
+						_textureReferences[image]--;
+					}
+				}
 			}
 		}
 
@@ -873,10 +1028,12 @@ namespace Re
 				vkGetBufferMemoryRequirements(_device._logical, vInfo._buffer, &memoryRequirements);
 
 				// Update size of individual buffer.
-				vInfo._size = memoryRequirements.size;
+				// vInfo._size = memoryRequirements.size;
+				vInfo._size = GetAlignedSize(memoryRequirements.size, memoryRequirements.alignment);
 
 				// Update general values for big chunk of memory.
-				vertexAllocationSize += memoryRequirements.size;
+				// vertexAllocationSize += memoryRequirements.size;
+				vertexAllocationSize += vInfo._size;
 				vertexAllowedTypes |= memoryRequirements.memoryTypeBits;
 			}
 
@@ -890,36 +1047,76 @@ namespace Re
 				vkGetBufferMemoryRequirements(_device._logical, iInfo._buffer, &memoryRequirements);
 
 				// Update size of individual buffer.
-				iInfo._size = memoryRequirements.size;
+				// iInfo._size = memoryRequirements.size;
+				iInfo._size = GetAlignedSize(memoryRequirements.size, memoryRequirements.alignment);
 
 				// Update general values for big chunk of memory.
-				indexAllocationSize += memoryRequirements.size;
+				// indexAllocationSize += memoryRequirements.size;
+				indexAllocationSize += iInfo._size;
 				indexAllowedTypes |= memoryRequirements.memoryTypeBits;
 			}
 
+			// Calculate proper memory size and type for textures.
+			usize imageAllocationSize = 0;
+			u32 imageAllowedTypes = 0;
+			for (auto& tInfo : _textureImagesToTransfer)
+			{
+				// Get image memory requirements.
+				VkMemoryRequirements memoryRequirements;
+				vkGetImageMemoryRequirements(_device._logical, tInfo._image, &memoryRequirements);
+
+				// Update size of individual image.
+				tInfo._size = GetAlignedSize(memoryRequirements.size, memoryRequirements.alignment);
+
+				// Update general values for big chunk of memory.
+				// imageAllocationSize += memoryRequirements.size;
+				imageAllocationSize += tInfo._size;
+				imageAllowedTypes |= memoryRequirements.memoryTypeBits;
+			}
+
 			// Create staging buffers, allocate memory and copy data over to them.
-			u32 i = sizeof(Vertex);
-			//CleanStageBuffers();
-			CHECK_RESULT(StageVertexBuffer(vertexAllocationSize, &_vertexStagingBuffer, &_vertexStagingMemory), RendererResult::Success, RendererResult::Failure)
-			CHECK_RESULT(StageIndexBuffer(indexAllocationSize, &_indexStagingBuffer, &_indexStagingMemory), RendererResult::Success, RendererResult::Failure)
-			
+			// u32 i = sizeof(Vertex);
+			VkBuffer vertexStagingBuffer = VK_NULL_HANDLE, indexStagingBuffer = VK_NULL_HANDLE, imageStagingBuffer = VK_NULL_HANDLE;
+			VkDeviceMemory vertexStagingMemory = VK_NULL_HANDLE, indexStagingMemory = VK_NULL_HANDLE, imageStagingMemory = VK_NULL_HANDLE;
+			CHECK_RESULT(StageVertexBuffer(vertexAllocationSize, &vertexStagingBuffer, &vertexStagingMemory), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(StageIndexBuffer(indexAllocationSize, &indexStagingBuffer, &indexStagingMemory), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(StageImageBuffer(imageAllocationSize, &imageStagingBuffer, &imageStagingMemory), RendererResult::Success, RendererResult::Failure)
+
 			// Allocate memory to real vertex buffer.
-			VkDeviceMemory vertexMemory;
-			VkMemoryAllocateInfo vertexAllocateInfo = {};
-			vertexAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			vertexAllocateInfo.allocationSize = vertexAllocationSize;
-			vertexAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(vertexAllowedTypes, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			VkDeviceMemory vertexMemory = VK_NULL_HANDLE;
+			if (vertexAllocationSize > 0)
+			{
+				VkMemoryAllocateInfo vertexAllocateInfo = {};
+				vertexAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+				vertexAllocateInfo.allocationSize = vertexAllocationSize;
+				vertexAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(vertexAllowedTypes, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-			CHECK_RESULT(vkAllocateMemory(_device._logical, &vertexAllocateInfo, nullptr, &vertexMemory), VK_SUCCESS, RendererResult::Failure)
-			
+				CHECK_RESULT(vkAllocateMemory(_device._logical, &vertexAllocateInfo, nullptr, &vertexMemory), VK_SUCCESS, RendererResult::Failure)
+			}
+
 			// Allocate memory to real index buffer.
-			VkDeviceMemory indexMemory;
-			VkMemoryAllocateInfo indexAllocateInfo = {};
-			indexAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			indexAllocateInfo.allocationSize = indexAllocationSize;
-			indexAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(indexAllowedTypes, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			VkDeviceMemory indexMemory = VK_NULL_HANDLE;
+			if (indexAllocationSize > 0)
+			{
+				VkMemoryAllocateInfo indexAllocateInfo = {};
+				indexAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+				indexAllocateInfo.allocationSize = indexAllocationSize;
+				indexAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(indexAllowedTypes, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-			CHECK_RESULT(vkAllocateMemory(_device._logical, &indexAllocateInfo, nullptr, &indexMemory), VK_SUCCESS, RendererResult::Failure)
+				CHECK_RESULT(vkAllocateMemory(_device._logical, &indexAllocateInfo, nullptr, &indexMemory), VK_SUCCESS, RendererResult::Failure)
+			}
+
+			// Allocate memory to real image.
+			VkDeviceMemory imageMemory = VK_NULL_HANDLE;
+			if (imageAllocationSize > 0)
+			{
+				VkMemoryAllocateInfo imageAllocateInfo = {};
+				imageAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+				imageAllocateInfo.allocationSize = imageAllocationSize;
+				imageAllocateInfo.memoryTypeIndex = FindMemoryTypeIndex(imageAllowedTypes, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+				CHECK_RESULT(vkAllocateMemory(_device._logical, &imageAllocateInfo, nullptr, &imageMemory), VK_SUCCESS, RendererResult::Failure);
+			}
 
 			// Bind memory to real buffers.
 			//VkDeviceSize indexOffset = 0, vertexOffset = 0;
@@ -962,6 +1159,19 @@ namespace Re
 				indexOffset += iInfo._size;
 			}
 
+			// Bind memory to real image.
+			VkDeviceSize imageOffset = 0;
+			for (const auto& tInfo : _textureImagesToTransfer)
+			{
+				CHECK_RESULT(vkBindImageMemory(_device._logical, tInfo._image, imageMemory, imageOffset), VK_SUCCESS, RendererResult::Failure)
+				CHECK_RESULT(CreateTextureImageView(tInfo._image), RendererResult::Success, RendererResult::Failure);
+				
+				_imageMemory.insert(boost::bimap<VkImage, VkDeviceMemory>::value_type(tInfo._image, imageMemory));
+				imageOffset += tInfo._size;
+			}
+
+			CreateTextureDescriptorSets();
+
 			// Begin command buffer as optimized for one-time usage.
 			VkCommandBufferBeginInfo beginInfo = {};
 			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -982,31 +1192,58 @@ namespace Re
 			VkDeviceSize vertexSrcOffset = 0;
 			for (const auto& vInfo : _vertexBuffersToTransfer)
 			{
-				VkDeviceSize size = vInfo._vertices.size() * sizeof(Vertex);
-
 				// Configure region of buffers to copy from.
 				VkBufferCopy region = {};
 				region.srcOffset = vertexSrcOffset;
 				region.dstOffset = 0;
-				region.size = size;
+				region.size = vInfo._vertices.size() * sizeof(Vertex);
 
-				vkCmdCopyBuffer(_transferBuffer, _vertexStagingBuffer, vInfo._buffer, 1, &region);
+				// Add copy operation to the command buffer.
+				vkCmdCopyBuffer(_transferBuffer, vertexStagingBuffer, vInfo._buffer, 1, &region);
 				vertexSrcOffset += vInfo._size;
 			}
 
 			VkDeviceSize indexSrcOffset = 0;
 			for (const auto& iInfo : _indexBuffersToTransfer)
 			{
-				VkDeviceSize size = iInfo._indices.size() * sizeof(u32);
-
 				// Configure region of buffers to copy from.
 				VkBufferCopy region = {};
 				region.srcOffset = indexSrcOffset;
 				region.dstOffset = 0;
-				region.size = size;
+				region.size = iInfo._indices.size() * sizeof(u32);
 
-				vkCmdCopyBuffer(_transferBuffer, _indexStagingBuffer, iInfo._buffer, 1, &region);
+				// Add copy operation to the command buffer.
+				vkCmdCopyBuffer(_transferBuffer, indexStagingBuffer, iInfo._buffer, 1, &region);
 				indexSrcOffset += iInfo._size;
+			}
+
+			VkDeviceSize imageSrcOffset = 0;
+			for (const auto& tInfo : _textureImagesToTransfer)
+			{
+				// Configure region of buffers to copy from.
+				VkBufferImageCopy region = {};
+				region.bufferOffset = imageSrcOffset;
+				region.bufferRowLength = 0;
+				region.bufferImageHeight = 0;
+				region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+				region.imageSubresource.mipLevel = 0;
+				region.imageSubresource.baseArrayLayer = 0;
+				region.imageSubresource.layerCount = 1;
+				region.imageOffset = { 0, 0, 0 };
+				region.imageExtent = { tInfo._width, tInfo._height, 1 };
+				
+				// Request to transition the image to receive data.
+				TransitionImageLayout(_transferBuffer, tInfo._image, VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0, VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+				
+				// Add copy operation to the command buffer.
+				vkCmdCopyBufferToImage(_transferBuffer, imageStagingBuffer, tInfo._image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+				
+				// Configure memory barrier to transition the image to be read from the fragment shader.
+				TransitionImageLayout(_transferBuffer, tInfo._image, _transferQueueFamily, _graphicsQueueFamily, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT, 0, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+				imageSrcOffset += tInfo._size;
 			}
 
 			CHECK_RESULT(vkEndCommandBuffer(_transferBuffer), VK_SUCCESS, RendererResult::Failure)
@@ -1017,30 +1254,46 @@ namespace Re
 			submitInfo.commandBufferCount = 1;
 			submitInfo.pCommandBuffers = &_transferBuffer;
 
-			// Load next inactive command buffer.
-			usize current = _currentBuffer.load();
-
 			// Submit command to queue and wait until it finishes.
-			CHECK_RESULT(vkQueueSubmit(_transferQueue, 1, &submitInfo, nullptr), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkQueueSubmit(_transferQueue, 1, &submitInfo, VK_NULL_HANDLE), VK_SUCCESS, RendererResult::Failure)
 
 			// TODO: In the future, record secondary command buffers for static objects.
 			
-			// Re-record the commands after performing transfering operations.
-			// RecordCommands(inactive, 0, _commandBuffers[inactive].size(), true);
-			UpdateVertexUniformBuffers(current);
-			UpdateFragmentUniformBuffers(current);
-			UpdateFragmentDynamicUniformBuffers(current);
+			UpdateFragmentDynamicUniformBuffers();
 
 			// Wait until the transfer operations are completed before proceeding.
 			CHECK_RESULT(vkQueueWaitIdle(_transferQueue), VK_SUCCESS, RendererResult::Failure);
 
+			// Push texture images after their layout has been released.
+			for (const auto& tInfo : _textureImagesToTransfer)
+				_releasedImages.push(tInfo._image);
+
 			// Add new entities to renderable entities.
 			_entitiesToRender.insert_unique(_entitiesToTransfer.begin(), _entitiesToTransfer.end());
 
-			// Cleanup transfered buffers and entities.
-			CleanStageBuffers();
+			// Cleanup stage buffers and free their memory.
+			if (imageStagingBuffer && imageStagingMemory)
+			{
+				vkDestroyBuffer(_device._logical, imageStagingBuffer, nullptr);
+				vkFreeMemory(_device._logical, imageStagingMemory, nullptr);
+			}
+
+			if (indexStagingBuffer && indexStagingMemory)
+			{
+				vkDestroyBuffer(_device._logical, indexStagingBuffer, nullptr);
+				vkFreeMemory(_device._logical, indexStagingMemory, nullptr);
+			}
+
+			if (vertexStagingBuffer && vertexStagingMemory)
+			{
+				vkDestroyBuffer(_device._logical, vertexStagingBuffer, nullptr);
+				vkFreeMemory(_device._logical, vertexStagingMemory, nullptr);
+			}
+
+			// Cleanup data structures containing buffers and entities to transfer.
 			_vertexBuffersToTransfer.clear();
 			_indexBuffersToTransfer.clear();
+			_textureImagesToTransfer.clear();
 			_entitiesToTransfer.clear();
 
 			return RendererResult::Success;
@@ -1048,6 +1301,8 @@ namespace Re
 
 		RendererResult Renderer::StageIndexBuffer(VkDeviceSize bufferSize, VkBuffer* stagingBuffer, VkDeviceMemory* stagingMemory)
 		{
+			if (bufferSize <= 0) return RendererResult::Success;
+
 			// Create staging buffer.
 			CHECK_RESULT(CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer), RendererResult::Success, RendererResult::Failure)
 			CHECK_RESULT(AllocateBuffer(*stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingMemory), RendererResult::Success, RendererResult::Failure)
@@ -1069,6 +1324,8 @@ namespace Re
 
 		RendererResult Renderer::StageVertexBuffer(VkDeviceSize bufferSize, VkBuffer* stagingBuffer, VkDeviceMemory* stagingMemory)
 		{
+			if (bufferSize <= 0) return RendererResult::Success;
+
 			// Create staging buffer.
 			CHECK_RESULT(CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer), RendererResult::Success, RendererResult::Failure)
 			CHECK_RESULT(AllocateBuffer(*stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingMemory), RendererResult::Success, RendererResult::Failure)
@@ -1086,6 +1343,51 @@ namespace Re
 
 			vkUnmapMemory(_device._logical, *stagingMemory);
 			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::StageImageBuffer(VkDeviceSize bufferSize, VkBuffer* stagingBuffer, VkDeviceMemory* stagingMemory)
+		{
+			if (bufferSize <= 0) return RendererResult::Success;
+
+			// Create staging buffer.
+			CHECK_RESULT(CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, stagingBuffer), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(AllocateBuffer(*stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingMemory), RendererResult::Success, RendererResult::Failure)
+
+			// Map pointer to staging buffer location and transfer data.
+			void* data;
+			CHECK_RESULT(vkMapMemory(_device._logical, *stagingMemory, 0, bufferSize, 0, &data), VK_SUCCESS, RendererResult::Failure)
+
+			VkDeviceSize stagingOffset = 0;
+			for (const auto& tInfo : _textureImagesToTransfer)
+			{
+				Memory::NMemCpy((u8*)data + stagingOffset, tInfo._pixels.data(), (usize)(tInfo._pixels.size() * sizeof(u8)));
+			 	stagingOffset += tInfo._size;
+			}
+
+			vkUnmapMemory(_device._logical, *stagingMemory);
+			return RendererResult::Success;
+		}
+
+		void Renderer::TransitionImageLayout(VkCommandBuffer commandBuffer, VkImage image, u32 srcQueueFamily, u32 dstQueueFamily, VkImageLayout srcLayout, VkImageLayout dstLayout, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkPipelineStageFlags srcStage, VkPipelineStageFlags dstStage)
+		{
+			// Configure memory barrier to transition the image.
+			VkImageMemoryBarrier memoryBarrier = {};
+			memoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			memoryBarrier.oldLayout = srcLayout;
+			memoryBarrier.newLayout = dstLayout;
+			memoryBarrier.srcQueueFamilyIndex = srcQueueFamily;
+			memoryBarrier.dstQueueFamilyIndex = dstQueueFamily;
+			memoryBarrier.image = image;
+			memoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			memoryBarrier.subresourceRange.baseMipLevel = 0;
+			memoryBarrier.subresourceRange.levelCount = 1;
+			memoryBarrier.subresourceRange.baseArrayLayer = 0;
+			memoryBarrier.subresourceRange.layerCount = 1;
+			memoryBarrier.srcAccessMask = srcAccess;
+			memoryBarrier.dstAccessMask = dstAccess;
+
+			// Add a pipeline barrier to transition the texture layout.
+			vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &memoryBarrier);
 		}
 
 		VkSurfaceFormatKHR Renderer::ChooseBestSurfaceFormat(const boost::container::vector<VkSurfaceFormatKHR>& formats) const
@@ -1220,8 +1522,10 @@ namespace Re
 				}
 			}
 
+			// TODO: Verify the presence of features in CheckPhysicalDeviceSuitable
 			// Construct the features from the device that we are going to use.
 			VkPhysicalDeviceFeatures features = {};
+			features.samplerAnisotropy = VK_TRUE;
 			
 			// Create the information regarding the logical device. (ignore layers, they are deprecated).
 			VkDeviceCreateInfo createInfo = {};
@@ -1237,6 +1541,9 @@ namespace Re
 			// Retrieve the queues created by the logical device and store handles.
 			vkGetDeviceQueue(_device._logical, familyInfo._graphicsFamily, 0, &_graphicsQueue);
 			vkGetDeviceQueue(_device._logical, familyInfo._presentationFamily, 0, &_presentationQueue);
+
+			_graphicsQueueFamily = familyInfo._graphicsFamily;
+			_transferQueueFamily = familyInfo._transferFamily;
 
 			// Retrieve proper transfer queue created by the logical device.
 			if (familyInfo.HasDedicatedTransfer())
@@ -1408,8 +1715,10 @@ namespace Re
 			return RendererResult::Success;
 		}
 
-		RendererResult Renderer::CreateDescriptorSetLayout()
+		RendererResult Renderer::CreateDescriptorSetLayouts()
 		{
+			// BUFFER DESCRIPTOR SET LAYOUT
+
 			// Descriptor set layout bindings information of the vertex uniform.
 			VkDescriptorSetLayoutBinding vertexUniformLayoutBinding = {};
 			vertexUniformLayoutBinding.binding = 0;
@@ -1435,18 +1744,36 @@ namespace Re
 			fragmentDynamicUniformLayoutBinding.pImmutableSamplers = nullptr;
 
 			// Assemble the binding informations into an array.
-			boost::array<VkDescriptorSetLayoutBinding, 3> layoutBindings = {
+			boost::array<VkDescriptorSetLayoutBinding, 3> bufferLayoutBindings = {
 				vertexUniformLayoutBinding, fragmentUniformLayoutBinding, fragmentDynamicUniformLayoutBinding
 			};
 
-			// Descriptor set layout creation information.
-			VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {};
-			layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-			layoutCreateInfo.bindingCount = static_cast<u32>(layoutBindings.size());
-			layoutCreateInfo.pBindings = layoutBindings.data();
+			// Buffer descriptor set layout creation information.
+			VkDescriptorSetLayoutCreateInfo bufferLayoutCreateInfo = {};
+			bufferLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			bufferLayoutCreateInfo.bindingCount = static_cast<u32>(bufferLayoutBindings.size());
+			bufferLayoutCreateInfo.pBindings = bufferLayoutBindings.data();
 
-			// Create descriptor set layout with the logical device.
-			CHECK_RESULT(vkCreateDescriptorSetLayout(_device._logical, &layoutCreateInfo, nullptr, &_descriptorSetLayout), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkCreateDescriptorSetLayout(_device._logical, &bufferLayoutCreateInfo, nullptr, &_bufferDescriptorSetLayout), VK_SUCCESS, RendererResult::Failure)
+			
+			// SAMPLER DESCRIPTOR SET LAYOUT
+
+			// Descriptor set layout bindings information of the texture sampler.
+			VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
+			samplerLayoutBinding.binding = 0;
+			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			samplerLayoutBinding.descriptorCount = 1;
+			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			samplerLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Sampler descriptor set layout creation information.
+			VkDescriptorSetLayoutCreateInfo samplerLayoutCreateInfo = {};
+			samplerLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			samplerLayoutCreateInfo.bindingCount = 1;
+			samplerLayoutCreateInfo.pBindings = &samplerLayoutBinding;
+
+			CHECK_RESULT(vkCreateDescriptorSetLayout(_device._logical, &samplerLayoutCreateInfo, nullptr, &_samplerDescriptorSetLayout), VK_SUCCESS, RendererResult::Failure)
+				
 			return RendererResult::Success;
 		}
 
@@ -1512,17 +1839,17 @@ namespace Re
 			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 			attributeDescriptions[0].offset = offsetof(Vertex, _position);
 			
-			// Color attribute.
+			// Normal attribute.
 			attributeDescriptions[1].binding = 0;
 			attributeDescriptions[1].location = 1;
 			attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attributeDescriptions[1].offset = offsetof(Vertex, _color);
+			attributeDescriptions[1].offset = offsetof(Vertex, _normal);
 
-			// Normal attribute.
+			// Texture coordinate attribute.
 			attributeDescriptions[2].binding = 0;
 			attributeDescriptions[2].location = 2;
-			attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attributeDescriptions[2].offset = offsetof(Vertex, _normal);
+			attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+			attributeDescriptions[2].offset = offsetof(Vertex, _textureCoordinate);
 
 			// Vertex input stage.
 			VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
@@ -1619,11 +1946,16 @@ namespace Re
 			#pragma endregion
 			#pragma region Pipeline Layout Stage
 
+			// Assemble pipeline layouts into an array.
+			boost::array<VkDescriptorSetLayout, 2> descriptorSetLayouts = {
+				_bufferDescriptorSetLayout, _samplerDescriptorSetLayout
+			};
+
 			// Pipeline layout stage creation information.
 			VkPipelineLayoutCreateInfo layoutCreateInfo = {};
 			layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			layoutCreateInfo.setLayoutCount = 1;
-			layoutCreateInfo.pSetLayouts = &_descriptorSetLayout;
+			layoutCreateInfo.setLayoutCount = static_cast<u32>(descriptorSetLayouts.size());
+			layoutCreateInfo.pSetLayouts = descriptorSetLayouts.data();
 			layoutCreateInfo.pushConstantRangeCount = static_cast<u32>(_pushConstantRanges.size());
 			layoutCreateInfo.pPushConstantRanges = _pushConstantRanges.data();
 
@@ -1725,10 +2057,7 @@ namespace Re
 			createInfo.queueFamilyIndex = familyInfo._graphicsFamily;
 			createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
-			{
-				CHECK_RESULT(vkCreateCommandPool(_device._logical, &createInfo, nullptr, &_graphicsPools[i]), VK_SUCCESS, RendererResult::Failure)
-			}
+			CHECK_RESULT(vkCreateCommandPool(_device._logical, &createInfo, nullptr, &_graphicsPool), VK_SUCCESS, RendererResult::Failure)
 
 			// Create command pool for transfer operations, if required.
 			if (familyInfo.HasDedicatedTransfer())
@@ -1746,7 +2075,7 @@ namespace Re
 				createInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
 				CHECK_RESULT(vkCreateCommandPool(_device._logical, &createInfo, nullptr, &_transferPool), VK_SUCCESS, RendererResult::Failure);
-				//_transferPool = _graphicsPools[0];
+				//_transferPool = _graphicsPool;
 			}
 
 			return RendererResult::Success;
@@ -1759,17 +2088,14 @@ namespace Re
 			allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
 			// Create command buffers for graphical operations.
-			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
-			{
-				_commandBuffers[i].resize(_swapchainFramebuffers.size());
+			_commandBuffers.resize(_swapchainImages.size());
 
-				// Configure allocation for specific command buffer set.
-				allocateInfo.commandPool = _graphicsPools[i];
-				allocateInfo.commandBufferCount = static_cast<u32>(_commandBuffers[i].size());
+			// Configure allocation for specific command buffer set.
+			allocateInfo.commandPool = _graphicsPool;
+			allocateInfo.commandBufferCount = static_cast<u32>(_commandBuffers.size());
 
-				CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, _commandBuffers[i].data()), VK_SUCCESS, RendererResult::Failure)
-			}
-
+			CHECK_RESULT(vkAllocateCommandBuffers(_device._logical, &allocateInfo, _commandBuffers.data()), VK_SUCCESS, RendererResult::Failure)
+		
 			// Create command buffer for transfer operations.
 			allocateInfo.commandPool = _transferPool;
 			allocateInfo.commandBufferCount = 1;
@@ -1782,151 +2108,165 @@ namespace Re
 		{
 			VkDeviceSize vertexBufferSize = sizeof(VertexUniform);
 			VkDeviceSize fragmentBufferSize = sizeof(FragmentUniform);
-			VkDeviceSize fragmentDynamicBufferSize = GetUniformAlignment(sizeof(FragmentDynamicUniform)) * MAX_ENTITIES;
+			VkDeviceSize fragmentDynamicBufferSize = GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment) * MAX_ENTITIES;
 
-			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
+			// Create one vertex uniform buffer for each swapchain image.
+			_vertexUniformBuffers.resize(_swapchainImages.size());
+			_vertexUniformBuffersMemory.resize(_swapchainImages.size());
+			for (usize i = 0; i < _vertexUniformBuffers.size(); ++i)
 			{
-				// Create one vertex uniform buffer for each swapchain image.
-				_vertexUniformBuffers[i].resize(_swapchainImages.size());
-				_vertexUniformBuffersMemory[i].resize(_swapchainImages.size());
-				for (usize j = 0; j < _vertexUniformBuffers[i].size(); ++j)
-				{
-					CHECK_RESULT(CreateBuffer(vertexBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_vertexUniformBuffers[i][j]), RendererResult::Success, RendererResult::Failure)
-					CHECK_RESULT(AllocateBuffer(_vertexUniformBuffers[i][j], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_vertexUniformBuffersMemory[i][j]), RendererResult::Success, RendererResult::Failure)
-				}
+				CHECK_RESULT(CreateBuffer(vertexBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_vertexUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateBuffer(_vertexUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_vertexUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
+			}
 
-				// Create one fragment uniform buffer for each swapchain image.
-				_fragmentUniformBuffers[i].resize(_swapchainImages.size());
-				_fragmentUniformBuffersMemory[i].resize(_swapchainImages.size());
-				for (usize j = 0; j < _fragmentUniformBuffers[i].size(); ++j)
-				{
-					CHECK_RESULT(CreateBuffer(fragmentBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_fragmentUniformBuffers[i][j]), RendererResult::Success, RendererResult::Failure)
-					CHECK_RESULT(AllocateBuffer(_fragmentUniformBuffers[i][j], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_fragmentUniformBuffersMemory[i][j]), RendererResult::Success, RendererResult::Failure)
-				}
+			// Create one fragment uniform buffer for each swapchain image.
+			_fragmentUniformBuffers.resize(_swapchainImages.size());
+			_fragmentUniformBuffersMemory.resize(_swapchainImages.size());
+			for (usize i = 0; i < _fragmentUniformBuffers.size(); ++i)
+			{
+				CHECK_RESULT(CreateBuffer(fragmentBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_fragmentUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateBuffer(_fragmentUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_fragmentUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
+			}
 
-				// Create one fragment dynamic uniform buffer for each swapchain image.
-				_fragmentDynamicUniformBuffers[i].resize(_swapchainImages.size());
-				_fragmentDynamicUniformBuffersMemory[i].resize(_swapchainImages.size());
-				for (usize j = 0; j < _fragmentDynamicUniformBuffers[i].size(); ++j)
-				{
-					CHECK_RESULT(CreateBuffer(fragmentDynamicBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_fragmentDynamicUniformBuffers[i][j]), RendererResult::Success, RendererResult::Failure)
-					CHECK_RESULT(AllocateBuffer(_fragmentDynamicUniformBuffers[i][j], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_fragmentDynamicUniformBuffersMemory[i][j]), RendererResult::Success, RendererResult::Failure)
-				}
+			// Create one fragment dynamic uniform buffer for each swapchain image.
+			_fragmentDynamicUniformBuffers.resize(_swapchainImages.size());
+			_fragmentDynamicUniformBuffersMemory.resize(_swapchainImages.size());
+			for (usize i = 0; i < _fragmentDynamicUniformBuffers.size(); ++i)
+			{
+				CHECK_RESULT(CreateBuffer(fragmentDynamicBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_fragmentDynamicUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateBuffer(_fragmentDynamicUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_fragmentDynamicUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
 			}
 
 			return RendererResult::Success;
 		}
 
-		RendererResult Renderer::CreateDescriptorPool()
+		RendererResult Renderer::CreateDescriptorPools()
 		{
+			// BUFFER DESCRIPTOR POOL
+
 			// Information about pool for the vertex uniform descriptors.
 			VkDescriptorPoolSize vertexPoolSize = {};
 			vertexPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			vertexPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size() * COMMAND_BUFFER_SETS);
+			vertexPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
 
 			// Information about pool for the fragment uniform descriptors.
 			VkDescriptorPoolSize fragmentPoolSize = {};
 			fragmentPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			fragmentPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size() * COMMAND_BUFFER_SETS);
+			fragmentPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
 
 			// Information about pool for the fragment dynamic uniform descriptors.
 			VkDescriptorPoolSize fragmentDynamicPoolSize = {};
 			fragmentDynamicPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-			fragmentDynamicPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size() * COMMAND_BUFFER_SETS);
+			fragmentDynamicPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
 
 			// Assemble pool sizes into an array.
 			boost::array<VkDescriptorPoolSize, 3> poolSizes = {
 				vertexPoolSize, fragmentPoolSize, fragmentDynamicPoolSize
 			};
 
-			// Descriptor pool creation information.
-			VkDescriptorPoolCreateInfo poolCreateInfo = {};
-			poolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			poolCreateInfo.maxSets = static_cast<u32>(_swapchainImages.size() * COMMAND_BUFFER_SETS);
-			poolCreateInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
-			poolCreateInfo.pPoolSizes = poolSizes.data();
+			// Buffer descriptor pool creation information.
+			VkDescriptorPoolCreateInfo bufferPoolCreateInfo = {};
+			bufferPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			bufferPoolCreateInfo.maxSets = static_cast<u32>(_swapchainImages.size());
+			bufferPoolCreateInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
+			bufferPoolCreateInfo.pPoolSizes = poolSizes.data();
 
-			CHECK_RESULT(vkCreateDescriptorPool(_device._logical, &poolCreateInfo, nullptr, &_descriptorPool), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkCreateDescriptorPool(_device._logical, &bufferPoolCreateInfo, nullptr, &_bufferDescriptorPool), VK_SUCCESS, RendererResult::Failure)
+			
+			// SAMPLER DESCRIPTOR POOL
+
+			// Information about pool for the texture sampler descriptors.
+			VkDescriptorPoolSize samplerPoolSize = {};
+			samplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			samplerPoolSize.descriptorCount = MAX_ENTITIES;
+
+			// Sampler descriptor pool creation information.
+			VkDescriptorPoolCreateInfo samplerPoolCreateInfo = {};
+			samplerPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			samplerPoolCreateInfo.maxSets = MAX_ENTITIES;
+			samplerPoolCreateInfo.poolSizeCount = 1;
+			samplerPoolCreateInfo.pPoolSizes = &samplerPoolSize;
+			samplerPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
+			CHECK_RESULT(vkCreateDescriptorPool(_device._logical, &samplerPoolCreateInfo, nullptr, &_samplerDescriptorPool), VK_SUCCESS, RendererResult::Failure)
+
 			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::CreateDescriptorSets()
 		{
-			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
+			// Setup a vector with layouts for each descriptor set created.
+			boost::container::vector<VkDescriptorSetLayout> setLayouts(_swapchainImages.size(), _bufferDescriptorSetLayout);
+
+			// Resize descriptor sets to match the uniform buffers they describe.
+			_bufferDescriptorSets.resize(_swapchainImages.size());
+
+			// Descriptor set allocation information.
+			VkDescriptorSetAllocateInfo allocateInfo = {};
+			allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocateInfo.descriptorPool = _bufferDescriptorPool;
+			allocateInfo.descriptorSetCount = static_cast<u32>(_swapchainImages.size());
+			allocateInfo.pSetLayouts = setLayouts.data();
+
+			// Allocate descriptor sets.
+			CHECK_RESULT(vkAllocateDescriptorSets(_device._logical, &allocateInfo, _bufferDescriptorSets.data()), VK_SUCCESS, RendererResult::Failure)
+
+			// Create the vectors to store descriptor set update information.
+			boost::container::vector<VkDescriptorBufferInfo> descriptorBuffer;
+			boost::container::vector<VkWriteDescriptorSet> descriptorWrite;
+
+			// Resize vectors to fit every single descriptor set.
+			descriptorBuffer.resize(3 * _bufferDescriptorSets.size());
+			descriptorWrite.resize(3 * _bufferDescriptorSets.size());
+
+			// Fill the information of the bindings between descriptor sets and uniform buffers.
+			for (usize i = 0; i < _bufferDescriptorSets.size(); ++i)
 			{
-				// Setup a vector with layouts for each descriptor set created.
-				boost::container::vector<VkDescriptorSetLayout> setLayouts(_swapchainImages.size(), _descriptorSetLayout);
+				// Vertex descriptor buffer information.
+				descriptorBuffer[i].buffer = _vertexUniformBuffers[i];
+				descriptorBuffer[i].offset = 0;
+				descriptorBuffer[i].range = sizeof(VertexUniform);
 
-				// Resize descriptor sets to match the uniform buffers they describe.
-				_descriptorSets[i].resize(_swapchainImages.size());
+				// Vertex write descriptor set information.
+				descriptorWrite[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite[i].dstSet = _bufferDescriptorSets[i];
+				descriptorWrite[i].dstBinding = 0;
+				descriptorWrite[i].dstArrayElement = 0;
+				descriptorWrite[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrite[i].descriptorCount = 1;
+				descriptorWrite[i].pBufferInfo = &descriptorBuffer[i];
 
-				// Descriptor set allocation information.
-				VkDescriptorSetAllocateInfo allocateInfo = {};
-				allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-				allocateInfo.descriptorPool = _descriptorPool;
-				allocateInfo.descriptorSetCount = static_cast<u32>(_swapchainImages.size());
-				allocateInfo.pSetLayouts = setLayouts.data();
+				// Fragment descriptor buffer information.
+				descriptorBuffer[i + _bufferDescriptorSets.size()].buffer = _fragmentUniformBuffers[i];
+				descriptorBuffer[i + _bufferDescriptorSets.size()].offset = 0;
+				descriptorBuffer[i + _bufferDescriptorSets.size()].range = sizeof(FragmentUniform);
 
-				// Allocate descriptor sets.
-				CHECK_RESULT(vkAllocateDescriptorSets(_device._logical, &allocateInfo, _descriptorSets[i].data()), VK_SUCCESS, RendererResult::Failure)
+				// Fragment write descriptor set information.
+				descriptorWrite[i + _bufferDescriptorSets.size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite[i + _bufferDescriptorSets.size()].dstSet = _bufferDescriptorSets[i];
+				descriptorWrite[i + _bufferDescriptorSets.size()].dstBinding = 1;
+				descriptorWrite[i + _bufferDescriptorSets.size()].dstArrayElement = 0;
+				descriptorWrite[i + _bufferDescriptorSets.size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrite[i + _bufferDescriptorSets.size()].descriptorCount = 1;
+				descriptorWrite[i + _bufferDescriptorSets.size()].pBufferInfo = &descriptorBuffer[i + _bufferDescriptorSets.size()];
 
-				// Create the vectors to store descriptor set update information.
-				boost::container::vector<VkDescriptorBufferInfo> descriptorBuffer;
-				boost::container::vector<VkWriteDescriptorSet> descriptorWrite;
+				// Fragment dynamic descriptor buffer information.
+				descriptorBuffer[i + 2 * _bufferDescriptorSets.size()].buffer = _fragmentDynamicUniformBuffers[i];
+				descriptorBuffer[i + 2 * _bufferDescriptorSets.size()].offset = 0;
+				descriptorBuffer[i + 2 * _bufferDescriptorSets.size()].range = GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment);
 
-				// Resize vectors to fit every single descriptor set.
-				descriptorBuffer.resize(3 * _descriptorSets[i].size());
-				descriptorWrite.resize(3 * _descriptorSets[i].size());
-
-				// Fill the information of the bindings between descriptor sets and uniform buffers.
-				for (usize j = 0; j < _descriptorSets[i].size(); ++j)
-				{
-					// Vertex descriptor buffer information.
-					descriptorBuffer[j].buffer = _vertexUniformBuffers[i][j];
-					descriptorBuffer[j].offset = 0;
-					descriptorBuffer[j].range = sizeof(VertexUniform);
-
-					// Vertex write descriptor set information.
-					descriptorWrite[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					descriptorWrite[j].dstSet = _descriptorSets[i][j];
-					descriptorWrite[j].dstBinding = 0;
-					descriptorWrite[j].dstArrayElement = 0;
-					descriptorWrite[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-					descriptorWrite[j].descriptorCount = 1;
-					descriptorWrite[j].pBufferInfo = &descriptorBuffer[j];
-
-					// Fragment descriptor buffer information.
-					descriptorBuffer[j + _descriptorSets[i].size()].buffer = _fragmentUniformBuffers[i][j];
-					descriptorBuffer[j + _descriptorSets[i].size()].offset = 0;
-					descriptorBuffer[j + _descriptorSets[i].size()].range = sizeof(FragmentUniform);
-
-					// Fragment write descriptor set information.
-					descriptorWrite[j + _descriptorSets[i].size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					descriptorWrite[j + _descriptorSets[i].size()].dstSet = _descriptorSets[i][j];
-					descriptorWrite[j + _descriptorSets[i].size()].dstBinding = 1;
-					descriptorWrite[j + _descriptorSets[i].size()].dstArrayElement = 0;
-					descriptorWrite[j + _descriptorSets[i].size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-					descriptorWrite[j + _descriptorSets[i].size()].descriptorCount = 1;
-					descriptorWrite[j + _descriptorSets[i].size()].pBufferInfo = &descriptorBuffer[j + _descriptorSets[i].size()];
-
-					// Fragment dynamic descriptor buffer information.
-					descriptorBuffer[j + 2 * _descriptorSets[i].size()].buffer = _fragmentDynamicUniformBuffers[i][j];
-					descriptorBuffer[j + 2 * _descriptorSets[i].size()].offset = 0;
-					descriptorBuffer[j + 2 * _descriptorSets[i].size()].range = GetUniformAlignment(sizeof(FragmentDynamicUniform));
-
-					// Fragment dynamic descriptor set information.
-					descriptorWrite[j + 2 * _descriptorSets[i].size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-					descriptorWrite[j + 2 * _descriptorSets[i].size()].dstSet = _descriptorSets[i][j];
-					descriptorWrite[j + 2 * _descriptorSets[i].size()].dstBinding = 2;
-					descriptorWrite[j + 2 * _descriptorSets[i].size()].dstArrayElement = 0;
-					descriptorWrite[j + 2 * _descriptorSets[i].size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-					descriptorWrite[j + 2 * _descriptorSets[i].size()].descriptorCount = 1;
-					descriptorWrite[j + 2 * _descriptorSets[i].size()].pBufferInfo = &descriptorBuffer[j + 2 * _descriptorSets[i].size()];
-				}
-
-				// Update the descriptor sets with the filled information.
-				vkUpdateDescriptorSets(_device._logical, descriptorWrite.size(), descriptorWrite.data(), 0, nullptr);
+				// Fragment dynamic descriptor set information.
+				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].dstSet = _bufferDescriptorSets[i];
+				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].dstBinding = 2;
+				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].dstArrayElement = 0;
+				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].descriptorCount = 1;
+				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].pBufferInfo = &descriptorBuffer[i + 2 * _bufferDescriptorSets.size()];
 			}
+
+			// Update the descriptor sets with the filled information.
+			vkUpdateDescriptorSets(_device._logical, descriptorWrite.size(), descriptorWrite.data(), 0, nullptr);
 
 			return RendererResult::Success;
 		}
@@ -1956,10 +2296,33 @@ namespace Re
 			return RendererResult::Success;
 		}
 
-		RendererResult Renderer::RecordCommands(usize buffer, usize offset, usize size, bool isTransfer)
+		RendererResult Renderer::CreateTextureSampler()
+		{
+			// Sampler creation information.
+			VkSamplerCreateInfo createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+			createInfo.magFilter = VK_FILTER_LINEAR;
+			createInfo.minFilter = VK_FILTER_LINEAR;
+			createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			createInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+			createInfo.unnormalizedCoordinates = VK_FALSE;
+			createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			createInfo.mipLodBias = 0.0f;
+			createInfo.minLod = 0.0f;
+			createInfo.maxLod = 0.0f;
+			createInfo.anisotropyEnable = VK_TRUE;
+			createInfo.maxAnisotropy = 16.0f;
+
+			CHECK_RESULT(vkCreateSampler(_device._logical, &createInfo, nullptr, &_textureSampler), VK_SUCCESS, RendererResult::Failure)
+			return RendererResult::Success;
+		}
+
+		RendererResult Renderer::RecordCommands(usize offset, usize size)
 		{
 			ASSERT(offset >= 0);
-			ASSERT(size <= _commandBuffers[buffer].size());
+			ASSERT(size <= _commandBuffers.size());
 
 			// Information about how to begin a command buffer.
 			VkCommandBufferBeginInfo bufferBeginInfo = {};
@@ -1985,72 +2348,76 @@ namespace Re
 				passBeginInfo.framebuffer = _swapchainFramebuffers[i];
 				
 				// Reset the command buffer.
-				CHECK_RESULT(vkResetCommandBuffer(_commandBuffers[buffer][i], 0), VK_SUCCESS, RendererResult::Failure)
-				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[buffer][i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure)
-				vkCmdBeginRenderPass(_commandBuffers[buffer][i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+				CHECK_RESULT(vkResetCommandBuffer(_commandBuffers[i], 0), VK_SUCCESS, RendererResult::Failure)
+				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure)
+
+				// Acquire images released by the transfer queue.
+				_releasedImages.consume_all([this, i](VkImage image) {
+					TransitionImageLayout(_commandBuffers[i], image, _transferQueueFamily, _graphicsQueueFamily, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+				});
+
+				vkCmdBeginRenderPass(_commandBuffers[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 				
 				if (_entitiesToRender.size() > 0)
 				{
-					vkCmdBindPipeline(_commandBuffers[buffer][i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+					vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
 
-					// Draw each renderable entity that has been streamed over to the renderer.
-					if (isTransfer)
+					usize j = 0;
+					for (auto& entity : _entitiesToRender)
 					{
-						usize j = 0;
-						BOOST_FOREACH(const auto& entity, boost::join(_entitiesToRender, _entitiesToTransfer))
-						{
-							RecordDraw(buffer, i, j, entity.second);
-							j++;
-						}
-					}
-					else
-					{
-						usize j = 0;
-						BOOST_FOREACH(const auto& entity, _entitiesToRender)
-						{
-							RecordDraw(buffer, i, j, entity.second);
-							j++;
-						}
+						// Acquire required information from the entities to be rendered.
+						const RenderInfo& renderInfo = entity.second;
+						VkBuffer vertexBuffer = renderInfo._vertexBuffer;
+						VkBuffer indexBuffer = renderInfo._indexBuffer;
+						u32 indexCount = renderInfo._indexCount;
+						VkImage textureImage = renderInfo._textureImage;
+						VkDeviceSize offsets[] = { 0 };
+
+						// Bind vertex and index buffers.
+						vkCmdBindVertexBuffers(_commandBuffers[i], 0, 1, &vertexBuffer, offsets);
+						vkCmdBindIndexBuffer(_commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+						// Create vertex push constant from object and camera information.
+						VertexPush vp = {};
+						vp._model = renderInfo._transformComponent ? renderInfo._transformComponent->GetModel() : Math::Matrix::Identity();
+						vp._view = _activeCamera ? _activeCamera->GetView() : Math::Matrix::Identity();
+
+						// Push constants into the shaders.
+						vkCmdPushConstants(_commandBuffers[i], _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT,
+							0, sizeof(VertexPush), &vp);
+
+						// Configure dynamic offsets for dynamic buffers.
+						u32 dynamicOffset = static_cast<u32>(GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment)) * j;
+
+						// Assemble descriptor sets into a single array.
+						boost::array<VkDescriptorSet, 2> descriptorSets = {
+							_bufferDescriptorSets[i], _textureDescriptorSets[textureImage] 
+						};
+
+						// Bind descriptor sets.
+						vkCmdBindDescriptorSets(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout,
+							0, descriptorSets.size(), descriptorSets.data(), 1, &dynamicOffset);
+
+						// Add rendering commands to the buffer.
+						vkCmdDrawIndexed(_commandBuffers[i], indexCount, 1, 0, 0, 0);
+						j++;
 					}
 				}
 
-				vkCmdEndRenderPass(_commandBuffers[buffer][i]);
-				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[buffer][i]), VK_SUCCESS, RendererResult::Failure)
+				vkCmdEndRenderPass(_commandBuffers[i]);
+				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[i]), VK_SUCCESS, RendererResult::Failure)
 			}
 			
 			return RendererResult::Success;
 		}
 
-		void Renderer::RecordDraw(usize bufferSet, usize bufferIndex, usize entityIndex, const RenderInfo& renderInfo)
+		void Renderer::UpdateDirectionalLight(FragmentUniform::FragmentDirectionalLight* dstLight, const boost::shared_ptr<Entities::DirectionalLight>& srcLight)
 		{
-			// Acquire required information from the entities to be rendered.
-			VkBuffer vertexBuffer = renderInfo._vertexBuffer;
-			VkBuffer indexBuffer = renderInfo._indexBuffer;
-			VkDeviceSize offsets[] = { 0 };
-			u32 count = renderInfo._indexCount;
-
-			// Bind vertex and index buffers.
-			vkCmdBindVertexBuffers(_commandBuffers[bufferSet][bufferIndex], 0, 1, &vertexBuffer, offsets);
-			vkCmdBindIndexBuffer(_commandBuffers[bufferSet][bufferIndex], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-			// Create vertex push constant from object and camera information.
-			VertexPush vp = {};
-			vp._model = renderInfo._transformComponent ? renderInfo._transformComponent->GetModel() : Math::Matrix::Identity();
-			vp._view = _activeCamera ? _activeCamera->GetView() : Math::Matrix::Identity();
-
-			// Push constants into the shaders.
-			vkCmdPushConstants(_commandBuffers[bufferSet][bufferIndex], _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 
-				0, sizeof(VertexPush), &vp);
-
-			// Configure dynamic offsets for dynamic buffers.
-			u32 dynamicOffset = static_cast<u32>(GetUniformAlignment(sizeof(FragmentDynamicUniform))) * entityIndex;
-
-			// Bind descriptor sets.
-			vkCmdBindDescriptorSets(_commandBuffers[bufferSet][bufferIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout,
-				0, 1, &_descriptorSets[bufferSet][bufferIndex], 1, &dynamicOffset);
-
-			// Add rendering commands to the buffer.
-			vkCmdDrawIndexed(_commandBuffers[bufferSet][bufferIndex], count, 1, 0, 0, 0);
+			dstLight->_base._color = srcLight->GetColor();
+			dstLight->_base._ambientStrength = srcLight->GetAmbientStrength();
+			dstLight->_base._diffuseStrength = srcLight->GetDiffuseStrength();
+			dstLight->_direction = srcLight->GetDirection();
 		}
 
 		void Renderer::UpdatePointLight(FragmentUniform::FragmentPointLight* dstLight, const boost::shared_ptr<Entities::PointLight>& srcLight)
@@ -2071,46 +2438,46 @@ namespace Re
 			dstLight->_cutoffAngle = cosf(Math::ToRadians(srcLight->GetCutoffAngle()));
 		}
 
-		void Renderer::UpdateVertexUniformBuffers(const usize bufferSet)
+		void Renderer::UpdateVertexUniformBuffers()
 		{
-			for (usize i = 0; i < _vertexUniformBuffersMemory[bufferSet].size(); ++i)
+			for (usize i = 0; i < _vertexUniformBuffersMemory.size(); ++i)
 			{
 				// Map pointer to buffer location.
 				void* data;
-				vkMapMemory(_device._logical, _vertexUniformBuffersMemory[bufferSet][i], 0, sizeof(VertexUniform), 0, &data);
+				vkMapMemory(_device._logical, _vertexUniformBuffersMemory[i], 0, sizeof(VertexUniform), 0, &data);
 
 				// Transfer data to buffer memory.
 				Memory::NMemCpy(data, &_vertexUniform, sizeof(VertexUniform));
 
 				// Unmap memory from pointer.
-				vkUnmapMemory(_device._logical, _vertexUniformBuffersMemory[bufferSet][i]);
+				vkUnmapMemory(_device._logical, _vertexUniformBuffersMemory[i]);
 			}
 		}
 
-		void Renderer::UpdateFragmentUniformBuffers(const usize bufferSet)
+		void Renderer::UpdateFragmentUniformBuffers()
 		{
-			for (usize i = 0; i < _fragmentUniformBuffersMemory[bufferSet].size(); ++i)
+			for (usize i = 0; i < _fragmentUniformBuffersMemory.size(); ++i)
 			{
 				// Map pointer to buffer location.
 				void* data;
-				vkMapMemory(_device._logical, _fragmentUniformBuffersMemory[bufferSet][i], 0, sizeof(FragmentUniform), 0, &data);
+				vkMapMemory(_device._logical, _fragmentUniformBuffersMemory[i], 0, sizeof(FragmentUniform), 0, &data);
 
 				// Transfer data to buffer memory.
 				Memory::NMemCpy(data, &_fragmentUniform, sizeof(FragmentUniform));
 
 				// Unmap memory from pointer.
-				vkUnmapMemory(_device._logical, _fragmentUniformBuffersMemory[bufferSet][i]);
+				vkUnmapMemory(_device._logical, _fragmentUniformBuffersMemory[i]);
 			}
 		}
 
-		void Renderer::UpdateFragmentDynamicUniformBuffers(const usize bufferSet)
+		void Renderer::UpdateFragmentDynamicUniformBuffers()
 		{
-			const usize uniformAlignment = GetUniformAlignment(sizeof(FragmentDynamicUniform));
-			for (usize i = 0; i < _fragmentDynamicUniformBuffersMemory[bufferSet].size(); ++i)
+			const usize uniformAlignment = GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment);
+			for (usize i = 0; i < _fragmentDynamicUniformBuffersMemory.size(); ++i)
 			{
 				// Map pointer to buffer location.
 				void* data;
-				vkMapMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[bufferSet][i], 0, uniformAlignment *
+				vkMapMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[i], 0, uniformAlignment *
 					_entitiesToRender.size() + _entitiesToTransfer.size(), 0, &data);
 
 				// Copy entity data over to fragment dynamic buffer.
@@ -2134,17 +2501,13 @@ namespace Re
 				}
 
 				// Unmap memory from pointer.
-				vkUnmapMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[bufferSet][i]);
+				vkUnmapMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[i]);
 			}
 		}
 		
 		void Renderer::DestroyCommandPools()
 		{
-			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
-			{
-				vkDestroyCommandPool(_device._logical, _graphicsPools[i], nullptr);
-			}
-
+			vkDestroyCommandPool(_device._logical, _graphicsPool, nullptr);
 			vkDestroyCommandPool(_device._logical, _transferPool, nullptr);
 		}
 
@@ -2155,6 +2518,7 @@ namespace Re
 			{
 				DestroyBuffer(ent.second._vertexBuffer);
 				DestroyBuffer(ent.second._indexBuffer);
+				DestroyImage(ent.second._textureImage);
 			}
 			
 			_entitiesToRender.clear();
@@ -2199,28 +2563,25 @@ namespace Re
 
 		void Renderer::DestroyUniformBuffers()
 		{
-			for (usize i = 0; i < COMMAND_BUFFER_SETS; ++i)
+			// Destroy vertex uniform buffers.
+			for (usize i = 0; i < _vertexUniformBuffers.size(); ++i)
 			{
-				// Destroy vertex uniform buffers.
-				for (usize j = 0; j < _vertexUniformBuffers[i].size(); ++j)
-				{
-					vkDestroyBuffer(_device._logical, _vertexUniformBuffers[i][j], nullptr);
-					vkFreeMemory(_device._logical, _vertexUniformBuffersMemory[i][j], nullptr);
-				}
+				vkDestroyBuffer(_device._logical, _vertexUniformBuffers[i], nullptr);
+				vkFreeMemory(_device._logical, _vertexUniformBuffersMemory[i], nullptr);
+			}
 
-				// Destroy fragment uniform buffers.
-				for (usize j = 0; j < _fragmentUniformBuffers[i].size(); ++j)
-				{
-					vkDestroyBuffer(_device._logical, _fragmentUniformBuffers[i][j], nullptr);
-					vkFreeMemory(_device._logical, _fragmentUniformBuffersMemory[i][j], nullptr);
-				}
+			// Destroy fragment uniform buffers.
+			for (usize i = 0; i < _fragmentUniformBuffers.size(); ++i)
+			{
+				vkDestroyBuffer(_device._logical, _fragmentUniformBuffers[i], nullptr);
+				vkFreeMemory(_device._logical, _fragmentUniformBuffersMemory[i], nullptr);
+			}
 
-				// Destroy fragment dynamic uniform buffers.
-				for (usize j = 0; j < _fragmentDynamicUniformBuffers[i].size(); ++j)
-				{
-					vkDestroyBuffer(_device._logical, _fragmentDynamicUniformBuffers[i][j], nullptr);
-					vkFreeMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[i][j], nullptr);
-				}
+			// Destroy fragment dynamic uniform buffers.
+			for (usize i = 0; i < _fragmentDynamicUniformBuffers.size(); ++i)
+			{
+				vkDestroyBuffer(_device._logical, _fragmentDynamicUniformBuffers[i], nullptr);
+				vkFreeMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[i], nullptr);
 			}
 		}
 

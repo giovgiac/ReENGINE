@@ -21,6 +21,8 @@ namespace Re
 
             Math::Vector3 GetDirection() const;
 
+            void SetDirection(Math::Vector3 direction);
+
         private:
             Math::Vector3 _direction;
 

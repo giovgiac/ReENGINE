@@ -7,8 +7,10 @@
 
 #pragma once
 
-#include "Core/Debug/Assert.hpp"
+#include "Graphics/Texture.hpp"
 
+#include <boost/make_shared.hpp>
+#include <boost/shared_ptr.hpp>
 #include <boost/signals2.hpp>
 
 namespace Re
@@ -18,11 +20,12 @@ namespace Re
         class Material
         {
         public:
-            Material();
-            explicit Material(f32 specularPower, f32 specularStrength);
+            Material(const boost::shared_ptr<Texture>& texture = nullptr);
+            explicit Material(f32 specularPower, f32 specularStrength, const boost::shared_ptr<Texture>& texture = nullptr);
 
             f32 GetSpecularPower() const;
             f32 GetSpecularStrength() const;
+            Texture* GetTexture() const;
 
         public:
             boost::signals2::signal<void()> OnParameterChanged;
@@ -30,6 +33,8 @@ namespace Re
         private:
             f32 _specularPower;
             f32 _specularStrength;
+
+            boost::shared_ptr<Texture> _texture;
 
         };
     }

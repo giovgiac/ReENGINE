@@ -1,9 +1,9 @@
 // Copyright (c) Giovanni Giacomo. All Rights Reserved.
 #version 450
 
-layout(location = 0) in vec3 fragColor;
+layout(location = 0) in vec3 fragPosition;
 layout(location = 1) in vec3 fragNormal;
-layout(location = 2) in vec3 fragPosition;
+layout(location = 2) in vec2 fragTextureCoordinate;
 layout(location = 3) in vec3 eyeDirection;
 
 layout(location = 0) out vec4 outColor;
@@ -49,6 +49,7 @@ struct Material
 	float specularStrength;
 };
 
+// Bindings belonging to the Uniform Buffer Descriptor Set.
 layout(set = 0, binding = 1) uniform FragmentUniform
 {
 	DirectionalLight directionalLight;
@@ -63,11 +64,17 @@ layout(set = 0, binding = 2) uniform FragmentDynamicUniform
 	Material material;
 } fdu;
 
+// Bindings belonging to the Texture Sampler Descriptor Set.
+
+layout(set = 1, binding = 0) uniform sampler2D textureSampler;
+
+// Helper functions for calculating the Phong Lighting Model.
+
 vec3 CalculateLightByDirection(Light base, vec3 direction)
 {
 	// Calculate ambient light parameters.
 	vec3 ambientColor = base.color * base.ambientStrength;
-
+	
 	// Calculate diffuse light parameters.
 	float diffuseFactor = max(dot(normalize(fragNormal), normalize(direction)), 0.0);
 	vec3 diffuseColor = diffuseFactor * base.diffuseStrength * base.color;
@@ -157,5 +164,5 @@ void main()
 	vec3 lightColor = CalculateDirectionalLight() + CalculatePointLights() + CalculateSpotLights();
 
 	// Calculate the final color of the fragment.
-	outColor = vec4(fragColor * lightColor, 1.0);
+	outColor = texture(textureSampler, fragTextureCoordinate) * vec4(lightColor, 1.0);
 }

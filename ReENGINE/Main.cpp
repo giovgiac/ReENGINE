@@ -61,7 +61,7 @@ public:
 NewtonManager nNewtonManager;
 TestGame nGameManager;
 
-const usize NUM_ENTITIES = 16384;
+const usize NUM_ENTITIES = 8192;
 
 /* TESTING CLASS - TO BE FULLY IMPLEMENTED LATER */
 // WINDOWS MAIN: i32 WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, i32) 
@@ -77,34 +77,40 @@ int main()
 	// Initialize the world.
 	world.Startup();
 
-	// TEST CODE: Create a camera to view the world from.
-	auto camera = world.SpawnEntity<Entities::Camera>(45.0f, 0.1f, 1000.0f);
-	camera->GetTransform()->Translate(3.0f, 0.0f, 7.0f);
-
-	// TEST CODE: Create a light to iluminate the world.
-	// auto directionalLight = SpawnEntity<Entities::DirectionalLight>(Math::Colors::White, Math::Vector3(2.0f, 1.0f, -2.0f), 0.2f, 0.7f);
-	// auto pointLight0 = world.SpawnEntity<Entities::PointLight>(Math::Colors::White, Math::Vector3(3.0f, 2.0f, 3.0f), 0.10f, 1.0f, 0.2f, 0.3f);
-	auto spotLight0 = world.SpawnEntity<Entities::SpotLight>(Math::Colors::White, Math::Vector3(3.0f, 0.0f, 7.0f), Math::Vector3(0.0f, 0.0f, -1.0f), 20.0f, 0.2f, 1.0f, 0.1f, 0.02f);
-	camera->GetTransform()->OnTransformChanged.connect([camera, spotLight0]() {
-		spotLight0->SetPosition(camera->GetTransform()->GetPosition());
-		spotLight0->SetDirection(camera->GetTransform()->GetTransform().Forward());
-	});
-
-	// TEST CODE: Create some test materials.
-	auto material0 = boost::make_shared<Graphics::Material>(32.0f, 1.0f);
-	auto material1 = boost::make_shared<Graphics::Material>(1.0f, 0.0f);
-
-	// TEST CODE: Create some test cubes.
-	//auto cube0 = world.SpawnEntity<Entities::Cube>(material0);
-	//auto cube1 = world.SpawnEntity<Entities::Cube>(2.0f, 0.0f, 0.0f, 1.0f, material1);
-
-	// TEST CODE: Spawn loads of cubes to test performance.
-	usize iterations = round(sqrt(NUM_ENTITIES));
-	for (usize i = 0; i < iterations; ++i)
 	{
-		for (usize j = 0; j < iterations; ++j)
+		// TEST CODE: Create a camera to view the world from.
+		auto camera = world.SpawnEntity<Entities::Camera>(45.0f, 0.1f, 1000.0f);
+		camera->GetTransform()->Translate(3.0f, 0.0f, 7.0f);
+
+		// TEST CODE: Create lights to illuminate the world.
+		// auto directionalLight = SpawnEntity<Entities::DirectionalLight>(Math::Colors::White, Math::Vector3(2.0f, 1.0f, -2.0f), 0.2f, 0.7f);
+		// auto pointLight0 = world.SpawnEntity<Entities::PointLight>(Math::Colors::White, Math::Vector3(3.0f, 2.0f, 3.0f), 0.10f, 1.0f, 0.2f, 0.3f);
+		auto spotLight0 = world.SpawnEntity<Entities::SpotLight>(Math::Colors::White, Math::Vector3(3.0f, 0.0f, 7.0f), Math::Vector3(0.0f, 0.0f, -1.0f), 20.0f, 0.2f, 1.0f, 0.1f, 0.02f);
+		camera->GetTransform()->OnTransformChanged.connect([camera, spotLight0]() {
+			spotLight0->SetPosition(camera->GetTransform()->GetPosition());
+			spotLight0->SetDirection(camera->GetTransform()->GetTransform().Forward());
+		});
+
+		// TEST CODE: Create some test textures.
+		auto texture0 = boost::make_shared<Graphics::Texture>("Textures/brick.png");
+		auto texture1 = boost::make_shared<Graphics::Texture>("Textures/dirt.png");
+
+		// TEST CODE: Create some test materials.
+		auto material0 = boost::make_shared<Graphics::Material>(32.0f, 1.0f, texture0);
+		auto material1 = boost::make_shared<Graphics::Material>(1.0f, 0.0f);
+
+		// TEST CODE: Create some test cubes.
+		//auto cube0 = world.SpawnEntity<Entities::Cube>(material0);
+		//auto cube1 = world.SpawnEntity<Entities::Cube>(2.0f, 0.0f, 0.0f, 1.0f, material1);
+
+		// TEST CODE: Spawn loads of cubes to test performance.
+		usize iterations = round(sqrt(NUM_ENTITIES));
+		for (usize i = 0; i < iterations; ++i)
 		{
-			world.SpawnEntity<Entities::Cube>(i * 2.0f, 0.0f, j * 2.0f, 1.0f, ((i + j) % 2 == 0) ? material0 : material1);
+			for (usize j = 0; j < iterations; ++j)
+			{
+				world.SpawnEntity<Entities::Cube>(i * 2.0f, 0.0f, j * 2.0f, 1.0f, ((i + j) % 2 == 0) ? material0 : material1);
+			}
 		}
 	}
 

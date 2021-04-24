@@ -11,7 +11,7 @@ namespace Re
 {
     namespace Graphics
     {
-		void CalculateAverageNormals(const boost::container::vector<u32>& indices, boost::container::vector<Vertex>& vertices)
+		void CalculateAverageNormals(boost::container::vector<Vertex>& vertices, const boost::container::vector<u32>& indices)
 		{
 			for (usize i = 0; i < indices.size(); i += 3)
 			{

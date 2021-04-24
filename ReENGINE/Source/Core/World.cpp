@@ -10,6 +10,8 @@
 #include "Components/RenderComponent.hpp"
 #include "Entities/Cube.hpp"
 
+#include <FreeImage.h>
+
 namespace Re
 {
 	namespace Core
@@ -81,7 +83,10 @@ namespace Re
 
 		WorldResult World::Startup()
 		{
-			CHECK_RESULT(_window.Startup("Test Application", 1024, 768, SW_SHOW), Platform::WindowResult::Success, WorldResult::Failure);
+			// Initialize third-party libraries.
+			FreeImage_Initialise();
+
+			CHECK_RESULT(_window.Startup("Test Application", 1280, 960, SW_SHOW), Platform::WindowResult::Success, WorldResult::Failure);
 			CHECK_RESULT(_renderer.Startup(_window), Graphics::RendererResult::Success, WorldResult::Failure);
 
 			// Initialize dispatching thread.
@@ -97,6 +102,9 @@ namespace Re
 			_entities.clear();
 			_renderer.Shutdown();
 			_window.Shutdown();
+
+			// Shutdown third-party libraries.
+			FreeImage_DeInitialise();
 		}
 
 		void World::Loop()
@@ -104,6 +112,8 @@ namespace Re
 			bool bAdded = false;
 			u32 frames = 0;
 			f32 elapsed = 0;
+			usize i = 4;
+			usize j = 0;
 
 			_timer.Reset();
 			_timer.Start();
@@ -123,7 +133,16 @@ namespace Re
 					frames = 0;
 
 					// TEST CODE: Spawn a cube every second.
-					// SpawnEntity<Entities::Cube>(rand() % 50, 0.0f, rand() % 50, 1.0f);
+					//SpawnEntity<Entities::Cube>(i * 2.0f, 0.0f, j * 2.0f, 1.0f);
+					//if (j < 3)
+					//{
+					//	j++;
+					//}
+					//else
+					//{
+					//	i++;
+					//	j = 0;
+					//}
 				}
 
 				frames++;

@@ -29,6 +29,10 @@ namespace Re
             f32 GetAmbientStrength() const;
             f32 GetDiffuseStrength() const;
 
+            void SetColor(Math::Color lightColor);
+            void SetAmbientStrength(f32 ambientStrength);
+            void SetDiffuseStrength(f32 diffuseStrength);
+
         public:
             boost::signals2::signal<void()> OnParameterChanged;
 

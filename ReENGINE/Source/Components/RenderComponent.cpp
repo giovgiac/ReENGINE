@@ -15,8 +15,16 @@ namespace Re
 	namespace Components
 	{
 		RenderComponent::RenderComponent(boost::container::vector<Graphics::Vertex>& vertices, boost::container::vector<u32>& indices, const boost::shared_ptr<Graphics::Material>& material)
-			: _vertices(vertices), _indices(indices), _material(material)
-		{}
+			: _vertices(vertices), _indices(indices)
+		{
+			static boost::shared_ptr<Graphics::Material> defaultMaterial = boost::make_shared<Graphics::Material>();
+			
+			// Assign material or provide default material.
+			if (material)
+				_material = material;
+			else
+				_material = defaultMaterial;
+		}
 
 		void RenderComponent::Initialize()
 		{

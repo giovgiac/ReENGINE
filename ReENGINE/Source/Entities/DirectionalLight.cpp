@@ -26,5 +26,11 @@ namespace Re
         {
             return _direction;
         }
+
+        void DirectionalLight::SetDirection(Math::Vector3 direction)
+        {
+            _direction = direction;
+            OnParameterChanged();
+        }
     }
 }

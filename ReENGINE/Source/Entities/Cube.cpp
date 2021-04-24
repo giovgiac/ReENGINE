@@ -20,14 +20,14 @@ namespace Re
 			: Entity(), _renderComponent(nullptr), _transformComponent(nullptr)
 		{
 			static boost::container::vector<Graphics::Vertex> vertices = {
-				{ -0.5f, -0.5f, +0.5f,		+1.0f, +0.0f, +0.0f,		0.0f, 0.0f, 0.0f },
-				{ +0.5f, -0.5f, +0.5f,		+1.0f, +0.0f, +0.0f,		0.0f, 0.0f, 0.0f },
-				{ +0.5f, +0.5f, +0.5f,		+1.0f, +0.0f, +0.0f,		0.0f, 0.0f, 0.0f },
-				{ -0.5f, +0.5f, +0.5f,		+1.0f, +0.0f, +0.0f,		0.0f, 0.0f, 0.0f },
-				{ -0.5f, -0.5f, -0.5f,		+0.0f, +0.0f, +1.0f,		0.0f, 0.0f, 0.0f },
-				{ +0.5f, -0.5f, -0.5f,		+0.0f, +0.0f, +1.0f,		0.0f, 0.0f, 0.0f },
-				{ +0.5f, +0.5f, -0.5f,		+0.0f, +0.0f, +1.0f,		0.0f, 0.0f, 0.0f },
-				{ -0.5f, +0.5f, -0.5f,		+0.0f, +0.0f, +1.0f,		0.0f, 0.0f, 0.0f },
+				{ -0.5f, -0.5f, +0.5f,		0.0f, 0.0f, 0.0f,		0.0f, 0.0f },
+				{ +0.5f, -0.5f, +0.5f,		0.0f, 0.0f, 0.0f,		1.0f, 0.0f },
+				{ +0.5f, +0.5f, +0.5f,		0.0f, 0.0f, 0.0f,		1.0f, 1.0f },
+				{ -0.5f, +0.5f, +0.5f,		0.0f, 0.0f, 0.0f,		0.0f, 1.0f },
+				{ -0.5f, -0.5f, -0.5f,		0.0f, 0.0f, 0.0f,		1.0f, 0.0f },
+				{ +0.5f, -0.5f, -0.5f,		0.0f, 0.0f, 0.0f,		0.0f, 0.0f },
+				{ +0.5f, +0.5f, -0.5f,		0.0f, 0.0f, 0.0f,		0.0f, 1.0f },
+				{ -0.5f, +0.5f, -0.5f,		0.0f, 0.0f, 0.0f,		1.0f, 1.0f },
 			};
 
 			static boost::container::vector<u32> indices = {
@@ -40,10 +40,13 @@ namespace Re
 			};
 
 			// Calculate the normals using the average method.
-			Graphics::CalculateAverageNormals(indices, vertices);
+			Graphics::CalculateAverageNormals(vertices, indices);
 
 			// Create the default components for the Cube entity.
-			_renderComponent = AddComponent<Components::RenderComponent>(vertices, indices, material);
+			if (material)
+				_renderComponent = AddComponent<Components::RenderComponent>(vertices, indices, material);
+			else
+				_renderComponent = AddComponent<Components::RenderComponent>(vertices, indices);
 			_transformComponent = AddComponent<Components::TransformComponent>();
 		}
 
@@ -69,7 +72,7 @@ namespace Re
 			Math::Rotator cubeRotation = _transformComponent->GetRotation();
 			if (cubeRotation._yaw >= 360.0f)
 				_transformComponent->SetRotation(cubeRotation._pitch, cubeRotation._roll, 0.0f);
-			//_transformComponent->Rotate(0.0f, 0.0f, rotationSpeed * deltaTime);
+			_transformComponent->Rotate(0.0f, 0.0f, rotationSpeed * deltaTime);
 		}
 	}
 }

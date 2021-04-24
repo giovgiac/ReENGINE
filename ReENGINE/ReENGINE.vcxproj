@@ -43,10 +43,12 @@
     <ClInclude Include="Source\Entities\Cube.hpp" />
     <ClInclude Include="Source\Entities\DirectionalLight.hpp" />
     <ClInclude Include="Source\Entities\Light.hpp" />
+    <ClInclude Include="Source\Entities\Mesh.hpp" />
     <ClInclude Include="Source\Entities\PointLight.hpp" />
     <ClInclude Include="Source\Entities\SpotLight.hpp" />
     <ClInclude Include="Source\Graphics\Material.hpp" />
     <ClInclude Include="Source\Graphics\Renderer.hpp" />
+    <ClInclude Include="Source\Graphics\Texture.hpp" />
     <ClInclude Include="Source\Graphics\Vulkan\Renderer.hpp" />
     <ClInclude Include="Source\Graphics\Vertex.hpp" />
     <ClInclude Include="Source\Localization\LocalizationManager.hpp" />
@@ -87,9 +89,11 @@
     <ClCompile Include="Source\Entities\Cube.cpp" />
     <ClCompile Include="Source\Entities\DirectionalLight.cpp" />
     <ClCompile Include="Source\Entities\Light.cpp" />
+    <ClCompile Include="Source\Entities\Mesh.cpp" />
     <ClCompile Include="Source\Entities\PointLight.cpp" />
     <ClCompile Include="Source\Entities\SpotLight.cpp" />
     <ClCompile Include="Source\Graphics\Material.cpp" />
+    <ClCompile Include="Source\Graphics\Texture.cpp" />
     <ClCompile Include="Source\Graphics\Vertex.cpp" />
     <ClCompile Include="Source\Graphics\Vulkan\Renderer.cpp" />
     <ClCompile Include="Source\Localization\LocalizationManager.cpp" />
@@ -111,10 +115,27 @@
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="Shaders\CompileShaders.bat" />
-    <None Include="Shaders\default.frag" />
+    <None Include="Shaders\default.frag">
+      <DeploymentContent>false</DeploymentContent>
+    </None>
     <None Include="Shaders\default.vert" />
-    <None Include="Shaders\frag.spv" />
-    <None Include="Shaders\vert.spv" />
+    <None Include="Shaders\frag.spv">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="Shaders\vert.spv">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Textures\brick.png">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\dirt.png">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\giraffe.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{F8D4338B-0390-45D9-A3D7-84CE0E96738A}</ProjectGuid>
@@ -190,40 +211,52 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <OutDir>Binaries\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>Intermediate\$(Platform)\$(Configuration)\</IntDir>
     <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib32;$(LibraryPath)</LibraryPath>
+    <CopyLocalDeploymentContent>true</CopyLocalDeploymentContent>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
     <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib;$(LibraryPath)</LibraryPath>
+    <OutDir>Binaries\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>Intermediate\$(Platform)\$(Configuration)\</IntDir>
+    <CopyLocalDeploymentContent>true</CopyLocalDeploymentContent>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <OutDir>Binaries\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>Intermediate\$(Platform)\$(Configuration)\</IntDir>
     <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib32;$(LibraryPath)</LibraryPath>
+    <CopyLocalDeploymentContent>true</CopyLocalDeploymentContent>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Production|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Microsoft Visual Studio 14.0\Team Tools\Static Analysis Tools\Rule Sets\NativeRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <RunCodeAnalysis>true</RunCodeAnalysis>
     <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(Platform)\$(Configuration)\</IntDir>
+    <OutDir>Binaries\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>Intermediate\$(Platform)\$(Configuration)\</IntDir>
     <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib32;$(LibraryPath)</LibraryPath>
+    <CopyLocalDeploymentContent>true</CopyLocalDeploymentContent>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
     <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib;$(LibraryPath)</LibraryPath>
+    <OutDir>Binaries\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>Intermediate\$(Platform)\$(Configuration)\</IntDir>
+    <CopyLocalDeploymentContent>true</CopyLocalDeploymentContent>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Production|x64'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>C:\VulkanSDK\1.2.170.0\Include;$(SolutionDir)ReENGINE\Source;$(IncludePath)</IncludePath>
     <LibraryPath>C:\VulkanSDK\1.2.170.0\Lib;$(LibraryPath)</LibraryPath>
+    <OutDir>Binaries\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>Intermediate\$(Platform)\$(Configuration)\</IntDir>
+    <CopyLocalDeploymentContent>true</CopyLocalDeploymentContent>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -396,6 +429,9 @@
     <Import Project="..\packages\boost_chrono-vc142.1.75.0.0\build\boost_chrono-vc142.targets" Condition="Exists('..\packages\boost_chrono-vc142.1.75.0.0\build\boost_chrono-vc142.targets')" />
     <Import Project="..\packages\boost_date_time-vc142.1.75.0.0\build\boost_date_time-vc142.targets" Condition="Exists('..\packages\boost_date_time-vc142.1.75.0.0\build\boost_date_time-vc142.targets')" />
     <Import Project="..\packages\boost_thread-vc142.1.75.0.0\build\boost_thread-vc142.targets" Condition="Exists('..\packages\boost_thread-vc142.1.75.0.0\build\boost_thread-vc142.targets')" />
+    <Import Project="..\packages\FreeImageNative.redist.3.17.0\build\native\FreeImageNative.redist.targets" Condition="Exists('..\packages\FreeImageNative.redist.3.17.0\build\native\FreeImageNative.redist.targets')" />
+    <Import Project="..\packages\FreeImageNative.3.17.0\build\native\FreeImageNative.targets" Condition="Exists('..\packages\FreeImageNative.3.17.0\build\native\FreeImageNative.targets')" />
+    <Import Project="..\packages\AssimpCpp.5.0.1.4\build\native\AssimpCpp.targets" Condition="Exists('..\packages\AssimpCpp.5.0.1.4\build\native\AssimpCpp.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
@@ -406,5 +442,8 @@
     <Error Condition="!Exists('..\packages\boost_chrono-vc142.1.75.0.0\build\boost_chrono-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_chrono-vc142.1.75.0.0\build\boost_chrono-vc142.targets'))" />
     <Error Condition="!Exists('..\packages\boost_date_time-vc142.1.75.0.0\build\boost_date_time-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_date_time-vc142.1.75.0.0\build\boost_date_time-vc142.targets'))" />
     <Error Condition="!Exists('..\packages\boost_thread-vc142.1.75.0.0\build\boost_thread-vc142.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\boost_thread-vc142.1.75.0.0\build\boost_thread-vc142.targets'))" />
+    <Error Condition="!Exists('..\packages\FreeImageNative.redist.3.17.0\build\native\FreeImageNative.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\FreeImageNative.redist.3.17.0\build\native\FreeImageNative.redist.targets'))" />
+    <Error Condition="!Exists('..\packages\FreeImageNative.3.17.0\build\native\FreeImageNative.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\FreeImageNative.3.17.0\build\native\FreeImageNative.targets'))" />
+    <Error Condition="!Exists('..\packages\AssimpCpp.5.0.1.4\build\native\AssimpCpp.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\AssimpCpp.5.0.1.4\build\native\AssimpCpp.targets'))" />
   </Target>
 </Project>

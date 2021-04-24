@@ -18,8 +18,8 @@ namespace Re
 		class Cube : public Core::Entity
 		{
 		public:
-			Cube(const boost::shared_ptr<Graphics::Material>& material = boost::make_shared<Graphics::Material>());
-			explicit Cube(f32 x, f32 y, f32 z, f32 scale, const boost::shared_ptr<Graphics::Material>& material = boost::make_shared<Graphics::Material>());
+			Cube(const boost::shared_ptr<Graphics::Material>& material = nullptr);
+			explicit Cube(f32 x, f32 y, f32 z, f32 scale, const boost::shared_ptr<Graphics::Material>& material = nullptr);
 
 			virtual void Initialize() override;
 			virtual void Update(f32 deltaTime) override;
