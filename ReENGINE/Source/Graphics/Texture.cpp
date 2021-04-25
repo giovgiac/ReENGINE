@@ -9,42 +9,49 @@
 
 #include <FreeImage.h>
 
-const u32 defaultWidth = 32;
-const u32 defaultHeight = 32;
+const u32 defaultBPP = 32;
+const u32 defaultWidth = 2048;
+const u32 defaultHeight = 2048;
 
-static boost::container::vector<u8> buildDefaultImage()
+u8* buildDefaultImage()
 {
-    boost::container::vector<u8> result;
+    FIBITMAP* dib = FreeImage_Allocate(defaultWidth, defaultHeight, defaultBPP, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
 
-    // Resize array of pixels appropriately.
-    result.resize(defaultWidth * defaultHeight * 4);
+    // Calculate the number of bytes per pixel.
+    i32 bpp = FreeImage_GetLine(dib) / FreeImage_GetWidth(dib);
 
-    // Build the default grid pattern.
-    for (usize i = 0; i < defaultHeight; ++i)
+    // Go through image pixels to build default grid pattern.
+    for (u32 y = 0; y < defaultHeight; ++y)
     {
-        for (usize j = 0; j < defaultWidth; ++j)
+        u8* bytes = FreeImage_GetScanLine(dib, y);
+        for (u32 x = 0; x < defaultWidth; ++x)
         {
-            if (i % 2 == 0)
+            // Set pixel color to grid pattern.
+            if (((x < defaultWidth / 2) && (y < defaultHeight / 2)) || ((x > defaultWidth / 2) && (y > defaultHeight / 2)))
             {
-                result[defaultWidth * defaultHeight * 0 + defaultWidth * j + i] = 255;
-                result[defaultWidth * defaultHeight * 1 + defaultWidth * j + i] = 255;
-                result[defaultWidth * defaultHeight * 2 + defaultWidth * j + i] = 255;
-                result[defaultWidth * defaultHeight * 3 + defaultWidth * j + i] = 255;
+                bytes[FI_RGBA_RED] = 63;
+                bytes[FI_RGBA_GREEN] = 63;
+                bytes[FI_RGBA_BLUE] = 63;
+                bytes[FI_RGBA_ALPHA] = 255;
             }
             else
             {
-                result[defaultWidth * defaultHeight * 0 + defaultWidth * j + i] = 63;
-                result[defaultWidth * defaultHeight * 1 + defaultWidth * j + i] = 63;
-                result[defaultWidth * defaultHeight * 2 + defaultWidth * j + i] = 63;
-                result[defaultWidth * defaultHeight * 3 + defaultWidth * j + i] = 255;
+                bytes[FI_RGBA_RED] = 255;
+                bytes[FI_RGBA_GREEN] = 255;
+                bytes[FI_RGBA_BLUE] = 255;
+                bytes[FI_RGBA_ALPHA] = 255;
             }
+
+            // Jump to next pixel.
+            bytes += bpp;
         }
     }
 
-    return result;
+    // Return pixels.
+    return FreeImage_GetBits(dib);
 }
 
-const boost::container::vector<u8> defaultImage = buildDefaultImage();
+static u8* defaultImage = buildDefaultImage();
 
 namespace Re
 {
@@ -83,10 +90,10 @@ namespace Re
                         FreeImage_Unload(raw);
 
                         // Save image information into texture.
-                        u8* bytes = FreeImage_GetBits(img);
+                        _bpp = FreeImage_GetBPP(img) / 8;
                         _width = FreeImage_GetWidth(img);
                         _height = FreeImage_GetHeight(img);
-                        _pixels.assign(bytes, bytes + (static_cast<usize>(_width) * static_cast<usize>(_height) * 4));
+                        _pixels = FreeImage_GetBits(img);
                         _handle = img;
                         _isLoaded = true;
                         return;
@@ -110,9 +117,10 @@ namespace Re
             }
 
             // Reset texture data to nothingness, except filename.
+            _bpp = 0;
             _width = 0;
             _height = 0;
-            _pixels = {};
+            _pixels = nullptr;
             _handle = nullptr;
             _isLoaded = false;
         }
@@ -122,17 +130,22 @@ namespace Re
             return _isLoaded;
         }
 
-        u32 Texture::GetWidth() const
+        usize Texture::GetWidth() const
         {
-            return _width;
+            return static_cast<usize>(_width);
         }
 
-        u32 Texture::GetHeight() const
+        usize Texture::GetHeight() const
         {
-            return _height;
+            return static_cast<usize>(_height);
         }
 
-        boost::container::vector<u8> Texture::GetPixels() const
+        usize Texture::GetBPP() const
+        {
+            return static_cast<usize>(_bpp);
+        }
+
+        u8* Texture::GetPixels() const
         {
             return _pixels;
         }
@@ -140,6 +153,7 @@ namespace Re
         void Texture::LoadDefaultTexture()
         {
             // Save default information (grid pattern) into texture.
+            _bpp = defaultBPP / 8;
             _width = defaultWidth;
             _height = defaultHeight;
             _pixels = defaultImage;

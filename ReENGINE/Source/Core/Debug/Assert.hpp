@@ -15,7 +15,7 @@
 
 #ifdef ASSERTIONS
 
-#define AssertBreak() //_asm { int 3 }
+#define AssertBreak() // _asm { int 3 }
 
 /*
  * @brief This function uses a default or ReENGINE's logging system to

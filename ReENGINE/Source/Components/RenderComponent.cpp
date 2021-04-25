@@ -18,7 +18,7 @@ namespace Re
 			: _vertices(vertices), _indices(indices)
 		{
 			static boost::shared_ptr<Graphics::Material> defaultMaterial = boost::make_shared<Graphics::Material>();
-			
+
 			// Assign material or provide default material.
 			if (material)
 				_material = material;

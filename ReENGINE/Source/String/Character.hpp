@@ -59,7 +59,7 @@ namespace Re
 
 		/**
 		 * @brief This function duplicates a string of characters of UTF-8 encoding.
-		 * It allocates space in memory using the NDefaultAllocator, unless
+		 * It allocates space in memory using the DefaultAllocator, unless
 		 * specified otherwise.
 		 *
 		 * @param str: the UTF-8 string to duplicate.
@@ -69,13 +69,13 @@ namespace Re
 		 */
 		extern INLINE utf8* NStrDup(const utf8* str)
 		{
-			Memory::NDefaultAllocator alloc;
+			Memory::DefaultAllocator alloc;
 			utf8* result = nullptr;
 			i32 size = NStrBytes(str);
 
 			// Allocate and Copy String
 			result = static_cast<utf8*>(alloc.AllocateAligned(sizeof(utf8) * size, ALIGNOF(utf8)));
-			Re::Memory::NMemCpy(result, str, sizeof(utf8) * size);
+			Re::Memory::Copy(result, str, sizeof(utf8) * size);
 			return result;
 		}
 

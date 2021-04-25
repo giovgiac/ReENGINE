@@ -1,10 +1,6 @@
 /*
  * StackAllocator.hpp
  *
- * This header file declares the NStackAllocator class which
- * has an important role in substituting direct heap allocation throughout
- * the ReENGINE.
- *
  * Copyright (c) Giovanni Giacomo. All Rights Reserved.
  *
  */
@@ -23,7 +19,7 @@ namespace Re
          *
          */
         template <usize StackSize>
-        class NStackAllocator : public IAllocator
+        class StackAllocator : public IAllocator
         {
         private:
             u8* Marker;
@@ -35,7 +31,7 @@ namespace Re
              * bytes, and sets the offset to 0.
              *
              */
-            NStackAllocator()
+            StackAllocator()
                 : Offset(0)
             {
                 Marker = new u8[StackSize];
@@ -45,7 +41,7 @@ namespace Re
              * @brief This destructor frees the block of memory previously allocated.
              *
              */
-            ~NStackAllocator()
+            ~StackAllocator()
             {
                 delete[] Marker;
             }

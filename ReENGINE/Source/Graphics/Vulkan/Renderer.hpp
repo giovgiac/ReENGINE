@@ -168,9 +168,10 @@ namespace Re
 			{
 				VkImage _image;
 				VkDeviceSize _size;
+				u32 _bpp;
 				u32 _width;
 				u32 _height;
-				boost::container::vector<u8> _pixels;
+				u8* _pixels;
 			};
 
 			// Vulkan-related structures.
@@ -399,7 +400,7 @@ namespace Re
 			boost::container::vector<VkFence> _drawFences;
 			
 			// Asset-related members.
-			boost::container::map<Texture*, VkImage> _textureImage;
+			boost::bimap<Texture*, VkImage> _textureImage;
 			boost::container::map<VkImage, VkImageView> _textureImageView;
 			boost::container::map<VkImage, VkDescriptorSet> _textureDescriptorSets;
 			boost::container::map<VkImage, usize> _textureReferences;

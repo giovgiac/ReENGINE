@@ -9,8 +9,6 @@
 
 #include "Core/Debug/Assert.hpp"
 
-#include <boost/container/vector.hpp>
-
 namespace Re
 {
     namespace Graphics
@@ -25,9 +23,10 @@ namespace Re
             void Unload();
 
             bool IsLoaded() const;
-            u32 GetWidth() const;
-            u32 GetHeight() const;
-            boost::container::vector<u8> GetPixels() const;
+            usize GetWidth() const;
+            usize GetHeight() const;
+            usize GetBPP() const;
+            u8* GetPixels() const;
 
         private:
             void LoadDefaultTexture();
@@ -36,9 +35,12 @@ namespace Re
             const utf8* _filename;
             bool _isLoaded;
 
+            // Stores the amount of bytes per pixel (usually 4).
+            u32 _bpp;
+
             u32 _width;
             u32 _height;
-            boost::container::vector<u8> _pixels;
+            u8* _pixels;
             
             void* _handle;
 

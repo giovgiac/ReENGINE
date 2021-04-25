@@ -53,7 +53,7 @@ namespace Re
 			i32 rightBytes = NStrBytes(right);
 
 			if (leftBytes == rightBytes)
-				return Re::Memory::NMemCmp(left, right, leftBytes);
+				return Re::Memory::Compare(left, right, leftBytes);
 			return false;
 		}
 

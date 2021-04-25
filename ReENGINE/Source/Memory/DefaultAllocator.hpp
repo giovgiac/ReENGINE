@@ -21,7 +21,7 @@ namespace Re
 		 * operating system or the HeapAllocator for memory.
 		 *
 		 */
-		class NDefaultAllocator : public IAllocator
+		class DefaultAllocator : public IAllocator
 		{
 		public:
 			/*

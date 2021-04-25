@@ -17,12 +17,12 @@
 #include <Windows.h>
 #include <windowsx.h>
 
-/* Get rid of Windows useless macros. */
+// Get rid of Windows useless macros.
 
 #undef min
 #undef max
 
-/* Windows Specific Settings */
+// Windows specific macro settings.
 
 #define ALIGNOF(x) alignof(x)
 #define FASTCALL __fastcall
@@ -37,10 +37,9 @@
 #define ASSERTIONS
 #endif
 
-/* Windows Specific Macros */
+// Windows specific macros
 
 #define NSUCCESS 0
-#define NFAILURE 1
 
 /* Windows Specific Atomic Data Types */
 
@@ -59,6 +58,6 @@ namespace Re
 	typedef float				f32;
 	typedef double				f64;
 	typedef char				utf8;
-	typedef	u32					utf32;
+	typedef	unsigned __int32	utf32;
 	typedef unsigned long		NRESULT;
 }

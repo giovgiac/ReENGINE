@@ -14,7 +14,7 @@
 
 namespace Re {
 	namespace Memory {
-		bool MEMCALL NMemCmp(const void* left, const void* right, u32 size) {
+		bool MEMCALL Compare(const void* left, const void* right, u32 size) {
 			bool res = true;
 
 			// Read Memory as Bytes
@@ -27,7 +27,7 @@ namespace Re {
 			return res;
 		}
 
-		void MEMCALL NMemCpy(void* destination, const void* source, usize size) {
+		void MEMCALL Copy(void* destination, const void* source, usize size) {
 			const u8* s = static_cast<const u8*>(source);
 			u8* d = static_cast<u8*>(destination);
 			i32 len;
@@ -64,7 +64,7 @@ namespace Re {
 			*/
 		}
 
-		void MEMCALL NMemMove(void* destination, void* source, usize size) {
+		void MEMCALL Move(void* destination, void* source, usize size) {
 			// Read Memory as Bytes
 			u8* src = static_cast<u8*>(source);
 			u8* dst = static_cast<u8*>(destination);
@@ -83,7 +83,7 @@ namespace Re {
 			}
 		}
 
-		void MEMCALL NMemSet(void* destination, u8 value, u32 size) {
+		void MEMCALL Set(void* destination, u8 value, u32 size) {
 			// Read Memory as Bytes
 			u8* dst = reinterpret_cast<u8*>(destination);
 

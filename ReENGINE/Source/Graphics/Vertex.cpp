@@ -21,9 +21,9 @@ namespace Re
 				u32 in2 = indices[i + 2];
 
 				// Calculate lines to find normal, using the cross-product.
-				Re::Math::Vector3 v1 = vertices[in1]._position - vertices[in0]._position;
-				Re::Math::Vector3 v2 = vertices[in2]._position - vertices[in0]._position;
-				Re::Math::Vector3 normal = Re::Math::Vector3::Cross(v1, v2).Normalize();
+				Math::Vector3 v1 = vertices[in1]._position - vertices[in0]._position;
+				Math::Vector3 v2 = vertices[in2]._position - vertices[in0]._position;
+				Math::Vector3 normal = Math::Vector3::Cross(v1, v2).Normalize();
 
 				// Add the normal to the vertices it belongs.
 				vertices[in0]._normal += normal;
@@ -31,11 +31,9 @@ namespace Re
 				vertices[in2]._normal += normal;
 			}
 
+			// Normalize the normal of each vertex.
 			for (usize i = 0; i < vertices.size(); ++i)
-			{
-				// Normalize the normal of each vertex.
 				vertices[i]._normal.Normalize();
-			}
 		}
     }
 }

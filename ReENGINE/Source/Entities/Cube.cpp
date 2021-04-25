@@ -19,7 +19,8 @@ namespace Re
 		Cube::Cube(const boost::shared_ptr<Graphics::Material>& material)
 			: Entity(), _renderComponent(nullptr), _transformComponent(nullptr)
 		{
-			static boost::container::vector<Graphics::Vertex> vertices = {
+			static boost::container::vector<Graphics::Vertex> vertices = 
+			{
 				{ -0.5f, -0.5f, +0.5f,		0.0f, 0.0f, 0.0f,		0.0f, 0.0f },
 				{ +0.5f, -0.5f, +0.5f,		0.0f, 0.0f, 0.0f,		1.0f, 0.0f },
 				{ +0.5f, +0.5f, +0.5f,		0.0f, 0.0f, 0.0f,		1.0f, 1.0f },
@@ -30,7 +31,8 @@ namespace Re
 				{ -0.5f, +0.5f, -0.5f,		0.0f, 0.0f, 0.0f,		1.0f, 1.0f },
 			};
 
-			static boost::container::vector<u32> indices = {
+			static boost::container::vector<u32> indices = 
+			{
 				0, 1, 3, 3, 1, 2,
 				1, 5, 2, 2, 5, 6,
 				5, 4, 6, 6, 4, 7,

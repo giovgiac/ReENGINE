@@ -13,12 +13,12 @@
 namespace Re {
 namespace Memory {
 
-void* NDefaultAllocator::Allocate(usize Size) 
+void* DefaultAllocator::Allocate(usize Size) 
 {
 	return malloc(Size);
 }
 
-void* NDefaultAllocator::AllocateAligned(usize Size, usize Alignment) 
+void* DefaultAllocator::AllocateAligned(usize Size, usize Alignment) 
 {
 	return _aligned_malloc(Size, Alignment);
 	/*
@@ -49,12 +49,12 @@ void* NDefaultAllocator::AllocateAligned(usize Size, usize Alignment)
 	*/
 }
 
-void NDefaultAllocator::Free(void* Address) 
+void DefaultAllocator::Free(void* Address) 
 {
 	free(Address);
 }
 
-void NDefaultAllocator::FreeAligned(void* Address) 
+void DefaultAllocator::FreeAligned(void* Address) 
 {
 	_aligned_free(Address);
 	/*

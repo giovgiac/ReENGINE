@@ -13,7 +13,7 @@ namespace Re
 	{
 		Matrix::Matrix()
 		{
-			Memory::NMemSet(Elements, 0, 16 * sizeof(f32));
+			Memory::Set(Elements, 0, 16 * sizeof(f32));
 		}
 
 		Matrix::Matrix(f32 InDiagonal)

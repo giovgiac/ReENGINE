@@ -795,9 +795,9 @@ namespace Re
 		{
 			if (!outImage) return RendererResult::Failure;
 
-			if (_textureImage.contains(texture))
+			if (_textureImage.left.find(texture) != _textureImage.left.end())
 			{
-				*outImage = _textureImage[texture];
+				*outImage = _textureImage.left.at(texture);
 				_textureReferences[*outImage] += 1;
 				return RendererResult::Success;
 			}
@@ -807,21 +807,19 @@ namespace Re
 				texture->Load();
 
 				// Calculate image size.
-				VkDeviceSize size = sizeof(u8) * texture->GetPixels().size();
+				VkDeviceSize size = texture->GetWidth() * texture->GetHeight() * texture->GetBPP() * sizeof(u8);
 				CHECK_RESULT(CreateImage(texture->GetWidth(), texture->GetHeight(), VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, outImage), RendererResult::Success, RendererResult::Failure)
 
 				// Create texture information to be able to transfer.
 				TextureInfo textureInfo = {};
 				textureInfo._image = *outImage;
 				textureInfo._size = 0;
+				textureInfo._bpp = texture->GetBPP();
 				textureInfo._width = texture->GetWidth();
 				textureInfo._height = texture->GetHeight();
 				textureInfo._pixels = texture->GetPixels();
 
-				// Unload texture from memory.
-				texture->Unload();
-
-				_textureImage.emplace_unique(texture, *outImage);
+				_textureImage.insert(boost::bimap<Texture*, VkImage>::value_type(texture, *outImage));
 				_textureReferences.emplace_unique(*outImage, 1);
 				_textureImagesToTransfer.emplace_back(textureInfo);
 			}
@@ -1028,11 +1026,9 @@ namespace Re
 				vkGetBufferMemoryRequirements(_device._logical, vInfo._buffer, &memoryRequirements);
 
 				// Update size of individual buffer.
-				// vInfo._size = memoryRequirements.size;
 				vInfo._size = GetAlignedSize(memoryRequirements.size, memoryRequirements.alignment);
 
 				// Update general values for big chunk of memory.
-				// vertexAllocationSize += memoryRequirements.size;
 				vertexAllocationSize += vInfo._size;
 				vertexAllowedTypes |= memoryRequirements.memoryTypeBits;
 			}
@@ -1047,11 +1043,9 @@ namespace Re
 				vkGetBufferMemoryRequirements(_device._logical, iInfo._buffer, &memoryRequirements);
 
 				// Update size of individual buffer.
-				// iInfo._size = memoryRequirements.size;
 				iInfo._size = GetAlignedSize(memoryRequirements.size, memoryRequirements.alignment);
 
 				// Update general values for big chunk of memory.
-				// indexAllocationSize += memoryRequirements.size;
 				indexAllocationSize += iInfo._size;
 				indexAllowedTypes |= memoryRequirements.memoryTypeBits;
 			}
@@ -1069,7 +1063,6 @@ namespace Re
 				tInfo._size = GetAlignedSize(memoryRequirements.size, memoryRequirements.alignment);
 
 				// Update general values for big chunk of memory.
-				// imageAllocationSize += memoryRequirements.size;
 				imageAllocationSize += tInfo._size;
 				imageAllowedTypes |= memoryRequirements.memoryTypeBits;
 			}
@@ -1269,7 +1262,7 @@ namespace Re
 				_releasedImages.push(tInfo._image);
 
 			// Add new entities to renderable entities.
-			_entitiesToRender.insert_unique(_entitiesToTransfer.begin(), _entitiesToTransfer.end());
+			_entitiesToRender.insert(_entitiesToTransfer.begin(), _entitiesToTransfer.end());
 
 			// Cleanup stage buffers and free their memory.
 			if (imageStagingBuffer && imageStagingMemory)
@@ -1314,7 +1307,7 @@ namespace Re
 			VkDeviceSize stagingOffset = 0;
 			for (const auto& iInfo : _indexBuffersToTransfer)
 			{
-				Memory::NMemCpy((u8*)data + stagingOffset, iInfo._indices.data(), (usize)(iInfo._indices.size() * sizeof(u32)));
+				Memory::Copy((u8*)data + stagingOffset, iInfo._indices.data(), (usize)(iInfo._indices.size() * sizeof(u32)));
 				stagingOffset += iInfo._size;
 			}
 
@@ -1337,7 +1330,7 @@ namespace Re
 			VkDeviceSize stagingOffset = 0;
 			for (const auto& vInfo : _vertexBuffersToTransfer)
 			{
-				Memory::NMemCpy((u8*)data + stagingOffset, vInfo._vertices.data(), (usize)(vInfo._vertices.size() * sizeof(Vertex)));
+				Memory::Copy((u8*)data + stagingOffset, vInfo._vertices.data(), (usize)(vInfo._vertices.size() * sizeof(Vertex)));
 				stagingOffset += vInfo._size;
 			}
 
@@ -1360,11 +1353,15 @@ namespace Re
 			VkDeviceSize stagingOffset = 0;
 			for (const auto& tInfo : _textureImagesToTransfer)
 			{
-				Memory::NMemCpy((u8*)data + stagingOffset, tInfo._pixels.data(), (usize)(tInfo._pixels.size() * sizeof(u8)));
+				Memory::Copy((u8*)data + stagingOffset, tInfo._pixels, tInfo._width * tInfo._height * tInfo._bpp * sizeof(u8));
 			 	stagingOffset += tInfo._size;
+
+				// Release texture image from RAM.
+				_textureImage.right.at(tInfo._image)->Unload();
 			}
 
 			vkUnmapMemory(_device._logical, *stagingMemory);
+
 			return RendererResult::Success;
 		}
 
@@ -2447,7 +2444,7 @@ namespace Re
 				vkMapMemory(_device._logical, _vertexUniformBuffersMemory[i], 0, sizeof(VertexUniform), 0, &data);
 
 				// Transfer data to buffer memory.
-				Memory::NMemCpy(data, &_vertexUniform, sizeof(VertexUniform));
+				Memory::Copy(data, &_vertexUniform, sizeof(VertexUniform));
 
 				// Unmap memory from pointer.
 				vkUnmapMemory(_device._logical, _vertexUniformBuffersMemory[i]);
@@ -2463,7 +2460,7 @@ namespace Re
 				vkMapMemory(_device._logical, _fragmentUniformBuffersMemory[i], 0, sizeof(FragmentUniform), 0, &data);
 
 				// Transfer data to buffer memory.
-				Memory::NMemCpy(data, &_fragmentUniform, sizeof(FragmentUniform));
+				Memory::Copy(data, &_fragmentUniform, sizeof(FragmentUniform));
 
 				// Unmap memory from pointer.
 				vkUnmapMemory(_device._logical, _fragmentUniformBuffersMemory[i]);

@@ -1,9 +1,6 @@
 /*
  * Memory.hpp
- *
- * This header file declares functions and classes that are related to the
- * Memory cross-platform subsystem employed by the ReENGINE.
- *
+ * 
  * Copyright (c) Giovanni Giacomo. All Rights Reserved.
  *
  */
@@ -12,66 +9,60 @@
 
 #include "Core/Debug/Assert.hpp"
 
-namespace Re {
-	namespace Memory {
+namespace Re 
+{
+	namespace Memory 
+	{
 		/*
-		 * NMemCmp Function
-		 *
-		 * This function compares whether two memory regions are equal, given their
+		 * @brief This function compares whether two memory regions are equal, given their
 		 * size and pointers to their initial addressess.
 		 *
-		 * const void* left: the pointer to the left-hand side of the comparison.
-		 * const void* right: the pointer to the right-hand side of the comparison.
-		 * u32 size: the size of the memory region to cover.
+		 * @param const void* left: the pointer to the left-hand side of the comparison.
+		 * @param const void* right: the pointer to the right-hand side of the comparison.
+		 * @param u32 size: the size of the memory region to cover.
 		 *
-		 * return: nothing.
+		 * @return: nothing.
 		 *
 		 */
-		extern bool MEMCALL NMemCmp(const void* left, const void* right, u32 size);
+		extern bool MEMCALL Compare(const void* left, const void* right, u32 size);
 
 		/*
-		 * NMemCpy Function
-		 *
-		 * This function copies the contents of a region in memory to another region
+		 * @brief This function copies the contents of a region in memory to another region
 		 * in memory, given pointers to those regions and their size.
 		 *
-		 * void* destination: the pointer to the destination location.
-		 * const void* source: the pointer to the source location.
-		 * u32 size: the amount of memory to copy.
+		 * @param void* destination: the pointer to the destination location.
+		 * @param const void* source: the pointer to the source location.
+		 * @param u32 size: the amount of memory to copy.
 		 *
-		 * return: nothing.
+		 * @return: nothing.
 		 *
 		 */
-		extern void MEMCALL NMemCpy(void* destination, const void* source, usize size);
+		extern void MEMCALL Copy(void* destination, const void* source, usize size);
 
 		/*
-		 * NMemMove Function
-		 *
-		 * This function moves contents from a region in memory to another region
+		 * @brief This function moves contents from a region in memory to another region
 		 * in memory, given pointers to the regions and the size.
 		 *
-		 * void* destination: the pointer to the destination location.
-		 * void* source: the pointer to the source location.
-		 * u32 size: the amount of memory to move.
+		 * @param void* destination: the pointer to the destination location.
+		 * @param void* source: the pointer to the source location.
+		 * @param u32 size: the amount of memory to move.
 		 *
-		 * return: nothing.
+		 * @return: nothing.
 		 *
 		 */
-		extern void MEMCALL NMemMove(void* destination, void* source, usize size);
+		extern void MEMCALL Move(void* destination, void* source, usize size);
 
 		/*
-		 * NMemSet Function
-		 *
-		 * This function sets the contents from a region in memory to a specified
+		 * @brief This function sets the contents from a region in memory to a specified
 		 * value.
 		 *
-		 * void* destination: the pointer to the destination location.
-		 * u8 value: the value to fill the region with.
-		 * u32 size: the amount of memory to set.
+		 * @param void* destination: the pointer to the destination location.
+		 * @param u8 value: the value to fill the region with.
+		 * @param u32 size: the amount of memory to set.
 		 *
-		 * return: nothing.
+		 * @return: nothing.
 		 *
 		 */
-		extern void MEMCALL NMemSet(void* destination, u8 value, u32 size);
+		extern void MEMCALL Set(void* destination, u8 value, u32 size);
 	}
 }
