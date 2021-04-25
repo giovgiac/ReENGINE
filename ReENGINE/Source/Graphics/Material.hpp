@@ -25,7 +25,7 @@ namespace Re
 
             f32 GetSpecularPower() const;
             f32 GetSpecularStrength() const;
-            Texture* GetTexture() const;
+            Texture* GetDiffuseTexture() const;
 
         public:
             boost::signals2::signal<void()> OnParameterChanged;
@@ -34,7 +34,7 @@ namespace Re
             f32 _specularPower;
             f32 _specularStrength;
 
-            boost::shared_ptr<Texture> _texture;
+            boost::shared_ptr<Texture> _diffuseTexture;
 
         };
     }

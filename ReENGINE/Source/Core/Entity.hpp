@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include "Core/Debug/Assert.hpp"
-#include "Graphics/Vertex.hpp"
 #include "Component.hpp"
+#include "Graphics/Vertex.hpp"
 
 #include <boost/container/map.hpp>
 #include <boost/container/vector.hpp>
@@ -40,29 +39,40 @@ namespace Re
                     "ComponentType passed for AddComponent does not inherit from Component.");
                 auto newComponent = new ComponentType(std::forward<ComponentArgs>(args)...);
 
-                _components.emplace_unique(typeid(ComponentType), newComponent);
+                _components.emplace(&typeid(ComponentType), newComponent);
                 newComponent->Owner = this;
                 newComponent->Initialize();
                 return newComponent;
             }
 
             template <typename ComponentType>
+            boost::container::vector<ComponentType*> GetComponents()
+            {
+                usize i = 0;
+                boost::container::vector<ComponentType*> components(_components.count(&typeid(ComponentType)));
+                for (auto it = _components.lower_bound(&typeid(ComponentType)); it != _components.upper_bound(&typeid(ComponentType)); ++it)
+                    components[i++] = static_cast<ComponentType*>(it->second);
+
+                return components;
+            }
+
+            template <typename ComponentType>
             bool HasComponent() const
             {
-                return _components.contains(typeid(ComponentType));
+                return _components.contains(&typeid(ComponentType));
             }
 
             template <typename ComponentType>
             ComponentType* GetComponent()
             {
-                return static_cast<ComponentType*>(_components[typeid(ComponentType)]);
+                return static_cast<ComponentType*>(_components.lower_bound(&typeid(ComponentType))->second);
             }
 
         protected:
             Entity();
 
         private:
-            boost::container::map<std::type_index, Component*> _components;
+            boost::container::multimap<const std::type_info*, Component*> _components;
             u32 _id;
             World* _owner;
         };

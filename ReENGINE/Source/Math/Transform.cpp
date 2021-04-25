@@ -39,12 +39,12 @@ namespace Re
 		Matrix Transform::ToModel() const
 		{
 			// Query for individual rotations around each of the euclidean axes.
-			Matrix rotationTransformX = Matrix::Rotation(_rotation._roll, Vector3(1.0f, 0.0f, 0.0f));
+			Matrix rotationTransformX = Matrix::Rotation(_rotation._pitch, Vector3(1.0f, 0.0f, 0.0f));
 			Matrix rotationTransformY = Matrix::Rotation(_rotation._yaw, Vector3(0.0f, 1.0f, 0.0f));
-			Matrix rotationTransformZ = Matrix::Rotation(_rotation._pitch, Vector3(0.0f, 0.0f, 1.0f));
+			Matrix rotationTransformZ = Matrix::Rotation(_rotation._roll, Vector3(0.0f, 0.0f, 1.0f));
 
 			// Produce and query the transformation matrices.
-			Matrix rotationTransform = rotationTransformX * rotationTransformY * rotationTransformZ;
+			Matrix rotationTransform = rotationTransformY * rotationTransformX * rotationTransformZ;
 			Matrix positionTransform = Matrix::Translation(_position);
 			Matrix scaleTransform = Matrix::Scale(_scale);
 

@@ -38,7 +38,7 @@ namespace Re
 			 * @param f32 InF: The value to initialize the components to.
 			 *
 			 */
-			explicit Vector(const f32 InF);
+			Vector(const f32 InF);
 
 			/**
 			 * Vector Constructor
@@ -49,7 +49,7 @@ namespace Re
 			 * @param f32 InY: The value of the Y coordinate.
 			 *
 			 */
-			explicit Vector(const f32 InX, const f32 InY);
+			Vector(const f32 InX, const f32 InY);
 
 			/**
 			 * Vector Add

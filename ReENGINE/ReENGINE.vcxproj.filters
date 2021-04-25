@@ -187,5 +187,34 @@
     <Image Include="Textures\brick.png" />
     <Image Include="Textures\dirt.png" />
     <Image Include="Textures\giraffe.jpg" />
+    <Image Include="Textures\land.jpg" />
+    <Image Include="Textures\LASER.tga" />
+    <Image Include="Textures\Main_Def.tga" />
+    <Image Include="Textures\Main_Nor.tga" />
+    <Image Include="Textures\Main_Spec.tga" />
+    <Image Include="Textures\Minigun_.tga" />
+    <Image Include="Textures\Ministan.tga" />
+    <Image Include="Textures\pal.jpg" />
+    <Image Include="Textures\panel.jpg" />
+    <Image Include="Textures\PLATEOX2.tga" />
+    <Image Include="Textures\Plt.jpg" />
+    <Image Include="Textures\REFMAP.gif" />
+    <Image Include="Textures\Track_Al.tga" />
+    <Image Include="Textures\Track_De.tga" />
+    <Image Include="Textures\Track_No.tga" />
+    <Image Include="Textures\Track_Sp.tga" />
+    <Image Include="Textures\WINGBACK.tga" />
+    <Image Include="Textures\WINGDOWN.tga" />
+    <Image Include="Textures\WINGFRON.tga" />
+    <Image Include="Textures\WINGTOP.tga" />
+    <Image Include="Textures\XSIDE.tga" />
+    <Image Include="Textures\XWBACK.tga" />
+    <Image Include="Textures\XWDOWN.tga" />
+    <Image Include="Textures\XWTOP.tga" />
+    <Image Include="Textures\fuselage.jpg" />
+    <Image Include="Textures\FRC.jpg" />
+    <Image Include="Textures\ENGINE2.tga" />
+    <Image Include="Textures\ENGINE.tga" />
+    <Image Include="Textures\BIBBUMP.jpg" />
   </ItemGroup>
 </Project>

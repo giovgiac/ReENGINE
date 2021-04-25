@@ -12,55 +12,48 @@
 
 #include "Core/Debug/Assert.hpp"
 
-namespace Re {
-	namespace Core {
+namespace Re 
+{
+	namespace Core 
+	{
 		/* 
-		 * Manager Class
-		 *
-		 * This is a virtual class which is inherited by all the Manager
+		 * @brief This is a virtual class which is inherited by all the Manager
 		 * classes in the ReENGINE. 
 		 *
 		 */
-		class Manager {
+		class Manager 
+		{
 		public:
 			/* 
-			 * Manager Constructor
-			 *
-			 * This constructor does nothing, since the method to be
+			 * @brief This constructor does nothing, since the method to be
 			 * used is the StartUp method. 
 			 *
 			 */
 			Manager() {}
 
 			/* 
-			 * Manager Destructor
-			 *
-			 * This destructor does nothing, since the method to be
+			 * @brief This destructor does nothing, since the method to be
 			 * used is the ShutDown method. 
 			 *
 			 */
-			~Manager() {}
+			virtual ~Manager() {}
 
 			/* 
-			 * Manager StartUp Method
-			 *
-			 * This method is a purely virtual method, supposed to be
+			 * @brief This method is a purely virtual method, supposed to be
 			 * overwritten by subclasses and it initializes the manager's
 			 * systems.
 			 *
-			 * return: NSUCCESS if successful, NFAILURE otherwise. 
+			 * @return: NSUCCESS if successful, NFAILURE otherwise. 
 			 *
 			 */
 			virtual NRESULT StartUp() = 0;
 
 			/* 
-			 * Manager ShutDown Method
-			 *
-			 * This method is a purely virtual method, supposed to be
+			 * @brief This method is a purely virtual method, supposed to be
 			 * overwritten by subclasses and it shuts down the manager's
 			 * systems.
 			 *
-			 * return: NSUCCESS if successful, NFAILURE otherwise.
+			 * @return: NSUCCESS if successful, NFAILURE otherwise.
 			 *
 			 */
 			virtual NRESULT ShutDown() = 0;

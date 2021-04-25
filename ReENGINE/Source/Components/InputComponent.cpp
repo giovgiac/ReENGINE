@@ -18,12 +18,11 @@ namespace Re
     {
         InputComponent::InputComponent()
             : Component(), _mouseDisplacement(Math::Vector(0.0f))
-        {
-        }
+        {}
 
         void InputComponent::Initialize()
         {
-            auto owner = GetOwner();
+            auto owner = GetEntity();
             if (owner)
             {
                 auto world = owner->GetWorld();

@@ -407,36 +407,45 @@ namespace Re
 						{
 							if (transferInfo._entity->HasComponent<Components::RenderComponent>())
 							{
-								auto renderComponent = transferInfo._entity->GetComponent<Components::RenderComponent>();
-								if (renderComponent)
+								// Create entity information to describe renderable entity.
+								EntityInfo entityInfo = {};
+
+								// Retrieve every render component belonging to the entity.
+								auto renderComponents = transferInfo._entity->GetComponents<Components::RenderComponent>();
+
+								// Resize renderables vector and record information for each one.
+								usize i = 0;
+								entityInfo._renderables.resize(renderComponents.size());
+								for (auto& renderComponent : renderComponents)
 								{
 									auto indices = renderComponent->GetIndices();
 									auto vertices = renderComponent->GetVertices();
 									if (indices.size() == 0 || vertices.size() == 0) continue;
 
 									// Create rendering information for renderable entity.
-									RenderInfo renderInfo = {};
-									renderInfo._indexCount = static_cast<i32>(indices.size());
-									renderInfo._vertexCount = static_cast<i32>(vertices.size());
-									renderInfo._material = renderComponent->GetMaterial();
+									RenderableInfo renderableInfo = {};
+									renderableInfo._indexCount = static_cast<i32>(indices.size());
+									renderableInfo._vertexCount = static_cast<i32>(vertices.size());
+									renderableInfo._material = renderComponent->GetMaterial();
 
 									// Create required buffers and images for the rendering.
-									CreateIndexBuffer(indices, &renderInfo._indexBuffer);
-									CreateVertexBuffer(vertices, &renderInfo._vertexBuffer);
-									CreateTextureImage(renderInfo._material->GetTexture(), &renderInfo._textureImage);
+									CreateIndexBuffer(indices, &renderableInfo._indexBuffer);
+									CreateVertexBuffer(vertices, &renderableInfo._vertexBuffer);
+									CreateTextureImage(renderableInfo._material->GetDiffuseTexture(), &renderableInfo._diffuseImage);
 
-									// Record the model matrix of the entity.
-									if (transferInfo._entity->HasComponent<Components::TransformComponent>())
-									{
-										auto transformComponent = transferInfo._entity->GetComponent<Components::TransformComponent>();
-										if (transformComponent)
-										{
-											renderInfo._transformComponent = transformComponent;
-										}
-									}
-
-									_entitiesToTransfer.emplace_unique(transferInfo._entity, renderInfo);
+									// Assign renderable information to the entity.
+									entityInfo._renderables[i++] = renderableInfo;
 								}
+
+								// Record the model matrix of the entity.
+								if (transferInfo._entity->HasComponent<Components::TransformComponent>())
+								{
+									auto transformComponent = transferInfo._entity->GetComponent<Components::TransformComponent>();
+									entityInfo._transformComponent = transformComponent;
+								}
+
+								// Place entity information to be transferred.
+								_entitiesToTransfer.emplace_unique(transferInfo._entity, entityInfo);
 							}
 						}
 						else
@@ -444,10 +453,13 @@ namespace Re
 							auto entity = _entitiesToRender.find(transferInfo._entity);
 							if (entity != _entitiesToRender.end())
 							{
-								// Destroy buffers and images created for the rendering.
-								DestroyBuffer(entity->second._indexBuffer);
-								DestroyBuffer(entity->second._vertexBuffer);
-								DestroyImage(entity->second._textureImage);
+								for (auto& renderableInfo : entity->second._renderables)
+								{
+									// Destroy buffers and images created for the rendering.
+									DestroyBuffer(renderableInfo._indexBuffer);
+									DestroyBuffer(renderableInfo._vertexBuffer);
+									DestroyImage(renderableInfo._diffuseImage);
+								}
 
 								_entitiesToRender.erase(entity);
 							}
@@ -1258,11 +1270,13 @@ namespace Re
 			CHECK_RESULT(vkQueueWaitIdle(_transferQueue), VK_SUCCESS, RendererResult::Failure);
 
 			// Push texture images after their layout has been released.
+			_transferMutex.lock();
 			for (const auto& tInfo : _textureImagesToTransfer)
 				_releasedImages.push(tInfo._image);
 
 			// Add new entities to renderable entities.
 			_entitiesToRender.insert(_entitiesToTransfer.begin(), _entitiesToTransfer.end());
+			_transferMutex.unlock();
 
 			// Cleanup stage buffers and free their memory.
 			if (imageStagingBuffer && imageStagingMemory)
@@ -2105,7 +2119,7 @@ namespace Re
 		{
 			VkDeviceSize vertexBufferSize = sizeof(VertexUniform);
 			VkDeviceSize fragmentBufferSize = sizeof(FragmentUniform);
-			VkDeviceSize fragmentDynamicBufferSize = GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment) * MAX_ENTITIES;
+			VkDeviceSize fragmentDynamicBufferSize = GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment) * MAX_RENDERABLES;
 
 			// Create one vertex uniform buffer for each swapchain image.
 			_vertexUniformBuffers.resize(_swapchainImages.size());
@@ -2175,12 +2189,12 @@ namespace Re
 			// Information about pool for the texture sampler descriptors.
 			VkDescriptorPoolSize samplerPoolSize = {};
 			samplerPoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			samplerPoolSize.descriptorCount = MAX_ENTITIES;
+			samplerPoolSize.descriptorCount = MAX_TEXTURES;
 
 			// Sampler descriptor pool creation information.
 			VkDescriptorPoolCreateInfo samplerPoolCreateInfo = {};
 			samplerPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			samplerPoolCreateInfo.maxSets = MAX_ENTITIES;
+			samplerPoolCreateInfo.maxSets = MAX_TEXTURES;
 			samplerPoolCreateInfo.poolSizeCount = 1;
 			samplerPoolCreateInfo.pPoolSizes = &samplerPoolSize;
 			samplerPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -2348,11 +2362,14 @@ namespace Re
 				CHECK_RESULT(vkResetCommandBuffer(_commandBuffers[i], 0), VK_SUCCESS, RendererResult::Failure)
 				CHECK_RESULT(vkBeginCommandBuffer(_commandBuffers[i], &bufferBeginInfo), VK_SUCCESS, RendererResult::Failure)
 
+				// Acquire lock to stop transfers from taking place.
+				_transferMutex.lock();
+
 				// Acquire images released by the transfer queue.
-				_releasedImages.consume_all([this, i](VkImage image) {
-					TransitionImageLayout(_commandBuffers[i], image, _transferQueueFamily, _graphicsQueueFamily, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-						VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-				});
+                _releasedImages.consume_all([this, i](VkImage image) {
+                    TransitionImageLayout(_commandBuffers[i], image, _transferQueueFamily, _graphicsQueueFamily, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 0, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+                    });
 
 				vkCmdBeginRenderPass(_commandBuffers[i], &passBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 				
@@ -2363,46 +2380,54 @@ namespace Re
 					usize j = 0;
 					for (auto& entity : _entitiesToRender)
 					{
-						// Acquire required information from the entities to be rendered.
-						const RenderInfo& renderInfo = entity.second;
-						VkBuffer vertexBuffer = renderInfo._vertexBuffer;
-						VkBuffer indexBuffer = renderInfo._indexBuffer;
-						u32 indexCount = renderInfo._indexCount;
-						VkImage textureImage = renderInfo._textureImage;
-						VkDeviceSize offsets[] = { 0 };
-
-						// Bind vertex and index buffers.
-						vkCmdBindVertexBuffers(_commandBuffers[i], 0, 1, &vertexBuffer, offsets);
-						vkCmdBindIndexBuffer(_commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+						// Retrieve the entity information.
+						const EntityInfo& entityInfo = entity.second;
 
 						// Create vertex push constant from object and camera information.
 						VertexPush vp = {};
-						vp._model = renderInfo._transformComponent ? renderInfo._transformComponent->GetModel() : Math::Matrix::Identity();
+						vp._model = entityInfo._transformComponent ? entityInfo._transformComponent->GetModel() : Math::Matrix::Identity();
 						vp._view = _activeCamera ? _activeCamera->GetView() : Math::Matrix::Identity();
 
 						// Push constants into the shaders.
-						vkCmdPushConstants(_commandBuffers[i], _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT,
-							0, sizeof(VertexPush), &vp);
+						vkCmdPushConstants(_commandBuffers[i], _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertexPush), &vp);
 
-						// Configure dynamic offsets for dynamic buffers.
-						u32 dynamicOffset = static_cast<u32>(GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment)) * j;
+						for (auto& renderableInfo : entityInfo._renderables)
+						{
+							// Acquire required information from the entities to be rendered.
+							VkBuffer vertexBuffer = renderableInfo._vertexBuffer;
+							VkBuffer indexBuffer = renderableInfo._indexBuffer;
+							u32 indexCount = renderableInfo._indexCount;
+							VkImage diffuseImage = renderableInfo._diffuseImage;
+							VkDeviceSize offsets[] = { 0 };
 
-						// Assemble descriptor sets into a single array.
-						boost::array<VkDescriptorSet, 2> descriptorSets = {
-							_bufferDescriptorSets[i], _textureDescriptorSets[textureImage] 
-						};
+							// Bind vertex and index buffers.
+							vkCmdBindVertexBuffers(_commandBuffers[i], 0, 1, &vertexBuffer, offsets);
+							vkCmdBindIndexBuffer(_commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-						// Bind descriptor sets.
-						vkCmdBindDescriptorSets(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout,
-							0, descriptorSets.size(), descriptorSets.data(), 1, &dynamicOffset);
+							// Configure dynamic offsets for dynamic buffers.
+							u32 dynamicOffset = static_cast<u32>(GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment)) * j;
 
-						// Add rendering commands to the buffer.
-						vkCmdDrawIndexed(_commandBuffers[i], indexCount, 1, 0, 0, 0);
-						j++;
+							// Assemble descriptor sets into a single array.
+							boost::array<VkDescriptorSet, 2> descriptorSets = {
+								_bufferDescriptorSets[i], _textureDescriptorSets[diffuseImage]
+							};
+
+							// Bind descriptor sets.
+							vkCmdBindDescriptorSets(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout,
+								0, descriptorSets.size(), descriptorSets.data(), 1, &dynamicOffset);
+
+							// Add rendering commands to the buffer.
+							vkCmdDrawIndexed(_commandBuffers[i], indexCount, 1, 0, 0, 0);
+							j++;
+						}
 					}
 				}
 
 				vkCmdEndRenderPass(_commandBuffers[i]);
+
+				// Release mutex after recording commands for this frame.
+				_transferMutex.unlock();
+
 				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[i]), VK_SUCCESS, RendererResult::Failure)
 			}
 			
@@ -2481,20 +2506,23 @@ namespace Re
 				usize j = 0;
 				BOOST_FOREACH(const auto& entity, boost::join(_entitiesToRender, _entitiesToTransfer))
 				{
-					// Construct data to place into shader.
-					FragmentDynamicUniform::FragmentMaterial material = {};
-					material._specularPower = entity.second._material->GetSpecularPower();
-					material._specularStrength = entity.second._material->GetSpecularStrength();
+					for (auto& renderableInfo : entity.second._renderables)
+					{
+						// Construct data to place into shader.
+						FragmentDynamicUniform::FragmentMaterial material = {};
+						material._specularPower = renderableInfo._material->GetSpecularPower();
+						material._specularStrength = renderableInfo._material->GetSpecularStrength();
 
-					FragmentDynamicUniform dynamicUniform = {};
-					dynamicUniform._material = material;
+						FragmentDynamicUniform dynamicUniform = {};
+						dynamicUniform._material = material;
 
-					// Read memory with specified alignment.
-					FragmentDynamicUniform* dynamicMemory = (FragmentDynamicUniform*)((usize)data + (j * uniformAlignment));
-					*dynamicMemory = dynamicUniform;
+						// Read memory with specified alignment.
+						FragmentDynamicUniform* dynamicMemory = (FragmentDynamicUniform*)((usize)data + (j * uniformAlignment));
+						*dynamicMemory = dynamicUniform;
 
-					// Update index.
-					j++;
+						// Move index over to next dynamic uniform location.
+						j++;
+					}
 				}
 
 				// Unmap memory from pointer.
@@ -2511,11 +2539,14 @@ namespace Re
 		void Renderer::DestroyEntities()
 		{
 			// Destroy each of the existing rendarable entities.
-			for (auto& ent : _entitiesToRender)
+			for (auto& entity : _entitiesToRender)
 			{
-				DestroyBuffer(ent.second._vertexBuffer);
-				DestroyBuffer(ent.second._indexBuffer);
-				DestroyImage(ent.second._textureImage);
+				for (auto& renderableInfo : entity.second._renderables)
+				{
+					DestroyBuffer(renderableInfo._vertexBuffer);
+					DestroyBuffer(renderableInfo._indexBuffer);
+					DestroyImage(renderableInfo._diffuseImage);
+				}
 			}
 			
 			_entitiesToRender.clear();

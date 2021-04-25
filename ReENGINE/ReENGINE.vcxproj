@@ -127,13 +127,100 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Image Include="Textures\BIBBUMP.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
     <Image Include="Textures\brick.png">
       <DeploymentContent>true</DeploymentContent>
     </Image>
     <Image Include="Textures\dirt.png">
       <DeploymentContent>true</DeploymentContent>
     </Image>
+    <Image Include="Textures\ENGINE.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\ENGINE2.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\FRC.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\fuselage.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
     <Image Include="Textures\giraffe.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\land.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\LASER.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Main_Def.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Main_Nor.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Main_Spec.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Minigun_.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Ministan.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\pal.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\panel.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\PLATEOX2.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Plt.jpg">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\REFMAP.gif">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Track_Al.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Track_De.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Track_No.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\Track_Sp.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\WINGBACK.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\WINGDOWN.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\WINGFRON.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\WINGTOP.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\XSIDE.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\XWBACK.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\XWDOWN.tga">
+      <DeploymentContent>true</DeploymentContent>
+    </Image>
+    <Image Include="Textures\XWTOP.tga">
       <DeploymentContent>true</DeploymentContent>
     </Image>
   </ItemGroup>

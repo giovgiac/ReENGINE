@@ -114,7 +114,7 @@ namespace Re
 			f32 elapsed = 0;
 			usize i = 4;
 			usize j = 0;
-
+			
 			_timer.Reset();
 			_timer.Start();
 			while (!_window.GetShouldClose())

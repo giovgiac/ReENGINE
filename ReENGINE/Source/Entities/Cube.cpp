@@ -69,7 +69,7 @@ namespace Re
 		{
 			Entity::Update(deltaTime);
 
-			// Set a smooth rotation on the cube object (for testing purposes).
+			// TEST CODE: Set a smooth rotation on the cube object (for testing purposes).
 			static f32 rotationSpeed = 32.0f;
 			Math::Rotator cubeRotation = _transformComponent->GetRotation();
 			if (cubeRotation._yaw >= 360.0f)

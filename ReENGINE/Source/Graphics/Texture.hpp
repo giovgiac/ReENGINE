@@ -9,6 +9,8 @@
 
 #include "Core/Debug/Assert.hpp"
 
+#include <string>
+
 namespace Re
 {
     namespace Graphics
@@ -18,6 +20,7 @@ namespace Re
         public:
             Texture();
             explicit Texture(const utf8* filename);
+            virtual ~Texture();
 
             void Load();
             void Unload();
@@ -32,7 +35,7 @@ namespace Re
             void LoadDefaultTexture();
 
         private:
-            const utf8* _filename;
+            std::string _filename;
             bool _isLoaded;
 
             // Stores the amount of bytes per pixel (usually 4).

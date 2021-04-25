@@ -18,9 +18,9 @@ namespace Re
 
             // Assign texture or provide default texture.
             if (texture)
-                _texture = texture;
+                _diffuseTexture = texture;
             else
-                _texture = defaultTexture;
+                _diffuseTexture = defaultTexture;
         }
 
         Material::Material(f32 specularPower, f32 specularStrength, const boost::shared_ptr<Texture>& texture)
@@ -41,9 +41,9 @@ namespace Re
             return _specularStrength;
         }
 
-        Texture* Material::GetTexture() const
+        Texture* Material::GetDiffuseTexture() const
         {
-            return _texture.get();
+            return _diffuseTexture.get();
         }
     }
 }

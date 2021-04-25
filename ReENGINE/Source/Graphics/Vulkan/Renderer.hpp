@@ -42,10 +42,11 @@
 
 #include <vulkan/vulkan.h>
 
-const usize MAX_FRAME_DRAWS = 3;
-const usize MAX_ENTITIES = 16384;
-const usize MAX_POINT_LIGHTS = 4;
-const usize MAX_SPOT_LIGHTS = 4;
+const usize MAX_FRAME_DRAWS		= 3;
+const usize MAX_RENDERABLES		= 8192;
+const usize MAX_TEXTURES		= 4096;
+const usize MAX_POINT_LIGHTS	= 4;
+const usize MAX_SPOT_LIGHTS		= 4;
 
 namespace Re
 {
@@ -124,7 +125,7 @@ namespace Re
 
 			// Transfer-related structures.
 
-            struct RenderInfo
+            struct RenderableInfo
             {
 				// Vertex-related information.
                 VkBuffer _vertexBuffer;
@@ -137,12 +138,17 @@ namespace Re
 				VkDeviceSize _indexSize;
 
 				// Texture-related information.
-				VkImage _textureImage;
+				VkImage _diffuseImage;
 
 				// Descriptor-related information.
-				Components::TransformComponent* _transformComponent;
 				Material* _material;
             };
+
+			struct EntityInfo
+			{
+				boost::container::vector<RenderableInfo> _renderables;
+				Components::TransformComponent* _transformComponent;
+			};
 
 			struct TransferInfo
 			{
@@ -369,8 +375,9 @@ namespace Re
 			boost::container::vector<VertexInfo> _vertexBuffersToTransfer;
 			boost::container::vector<IndexInfo> _indexBuffersToTransfer;
 			boost::container::vector<TextureInfo> _textureImagesToTransfer;
-			boost::container::map<Core::Entity*, RenderInfo> _entitiesToTransfer;
+			boost::container::map<Core::Entity*, EntityInfo> _entitiesToTransfer;
 			boost::lockfree::spsc_queue<VkImage> _releasedImages;
+			boost::mutex _transferMutex;
 
 			// Descriptor-related members.
 			VkDescriptorSetLayout _bufferDescriptorSetLayout;
@@ -407,7 +414,7 @@ namespace Re
 			VkSampler _textureSampler;
 
 			// Entity-related members.
-			boost::container::map<Core::Entity*, RenderInfo> _entitiesToRender;
+			boost::container::map<Core::Entity*, EntityInfo> _entitiesToRender;
 
 			// Camera-related members.
 			boost::shared_ptr<Entities::Camera> _activeCamera;

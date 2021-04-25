@@ -13,6 +13,7 @@
 #include "Components/RenderComponent.hpp"
 #include "Components/TransformComponent.hpp"
 #include "Entities/Cube.hpp"
+#include "Entities/Mesh.hpp"
 #include "Memory/StackAllocator.hpp"
 
 #include "Core/World.hpp"
@@ -80,16 +81,17 @@ int main()
 	{
 		// TEST CODE: Create a camera to view the world from.
 		auto camera = world.SpawnEntity<Entities::Camera>(45.0f, 0.1f, 1000.0f);
-		camera->GetTransform()->Translate(3.0f, 0.0f, 7.0f);
+		// camera->GetTransform()->Translate(0.0f, 8.0f, 40.0f);
+		camera->GetTransform()->Translate(0.0f, 2.0f, 16.0f);
 
 		// TEST CODE: Create lights to illuminate the world.
-		// auto directionalLight = world.SpawnEntity<Entities::DirectionalLight>(Math::Colors::White, Math::Vector3(2.0f, 1.0f, -2.0f), 0.2f, 0.7f);
+		auto directionalLight = world.SpawnEntity<Entities::DirectionalLight>(Math::Colors::White, Math::Vector3(2.0f, 1.0f, -2.0f), 0.2f, 0.7f);
 		// auto pointLight0 = world.SpawnEntity<Entities::PointLight>(Math::Colors::White, Math::Vector3(3.0f, 1.0f, 3.0f), 0.05f, 0.5f, 0.7f, 0.5f);
-		auto spotLight0 = world.SpawnEntity<Entities::SpotLight>(Math::Colors::GhostWhite, Math::Vector3(3.0f, 0.0f, 7.0f), Math::Vector3(0.0f, 0.0f, -1.0f), 20.0f, 0.2f, 1.0f, 0.1f, 0.07f);
-		camera->GetTransform()->OnTransformChanged.connect([camera, spotLight0]() {
-			spotLight0->SetPosition(camera->GetTransform()->GetPosition());
-			spotLight0->SetDirection(camera->GetTransform()->GetTransform().Forward());
-		});
+		//auto spotLight0 = world.SpawnEntity<Entities::SpotLight>(Math::Colors::GhostWhite, Math::Vector3(3.0f, 0.0f, 7.0f), Math::Vector3(0.0f, 0.0f, -1.0f), 20.0f, 0.2f, 1.0f, 0.1f, 0.02f);
+		//camera->GetTransform()->OnTransformChanged.connect([camera, spotLight0]() {
+		//	spotLight0->SetPosition(camera->GetTransform()->GetPosition());
+		//	spotLight0->SetDirection(camera->GetTransform()->GetTransform().Forward());
+		//});
 
 		// TEST CODE: Create some test textures.
 		auto texture0 = boost::make_shared<Graphics::Texture>("Textures/brick.png");
@@ -111,9 +113,17 @@ int main()
 		{
 			for (usize j = 0; j < iterations; ++j)
 			{
-				world.SpawnEntity<Entities::Cube>(i * 2.0f, 0.0f, j * 2.0f, 1.0f, materials[rand() % materials.size()]);
+				world.SpawnEntity<Entities::Cube>(i * 2.0f - (iterations - 1), 0.0f, j * 2.0f - (iterations - 1), 1.0f, materials[rand() % materials.size()]);
 			}
 		}
+
+		// TEST CODE: Load an external 3D model and textures.
+		auto mesh0 = world.SpawnEntity<Entities::Mesh>("Models/uh60.obj");
+		mesh0->GetTransform()->Rotate(-90.0f, 0.0f, 0.0f);
+		mesh0->GetTransform()->Translate(0.0f, 4.0f, 0.0f);
+
+		auto mesh1 = world.SpawnEntity<Entities::Mesh>("Models/x-wing.obj");
+		mesh1->GetTransform()->Scale(0.25f);
 	}
 
 	// Run the main loop of the engine.

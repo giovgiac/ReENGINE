@@ -131,7 +131,7 @@ namespace Re
 			_cameraView = Math::Matrix::LookAt(
 				_transformComponent->GetPosition(),
 				_transformComponent->GetPosition() + _transformComponent->GetTransform().Forward(),
-				Math::WorldUp
+				_transformComponent->GetTransform().Up()
 			);
 		}
 	}

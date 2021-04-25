@@ -37,7 +37,7 @@ namespace Re
 			 * @param f32 InF: The value to initialize the coordinates with.
 			 *
 			 */
-			explicit inline Vector3(f32 InF)
+			inline Vector3(f32 InF)
 				: X(InF), Y(InF), Z(InF) {}
 
 			/**
@@ -48,7 +48,7 @@ namespace Re
 			 * @param f32 InZ: The value of the Z coordinate.
 			 *
 			 */
-			explicit inline Vector3(f32 InX, f32 InY, f32 InZ)
+			inline Vector3(f32 InX, f32 InY, f32 InZ)
 				: X(InX), Y(InY), Z(InZ) {}
 
 			/**

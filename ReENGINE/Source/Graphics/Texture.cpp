@@ -7,6 +7,8 @@
 
 #include "Texture.hpp"
 
+#include "String/Character.hpp"
+
 #include <FreeImage.h>
 
 const u32 defaultBPP = 32;
@@ -65,8 +67,12 @@ namespace Re
             : Texture()
         {
             // Set values as specified.
+            // TODO: Revert back to const utf8* and use StrDup.
             _filename = filename;
         }
+
+        Texture::~Texture()
+        {}
 
         void Texture::Load()
         {
@@ -78,11 +84,11 @@ namespace Re
             }
             else
             {
-                FREE_IMAGE_FORMAT format = FreeImage_GetFileType(_filename);
+                FREE_IMAGE_FORMAT format = FreeImage_GetFileType(_filename.c_str());
 
                 if (format != FIF_UNKNOWN)
                 {
-                    FIBITMAP* raw = FreeImage_Load(format, _filename);
+                    FIBITMAP* raw = FreeImage_Load(format, _filename.c_str());
                     FIBITMAP* img = FreeImage_ConvertTo32Bits(raw);
 
                     if (img)

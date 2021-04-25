@@ -23,6 +23,9 @@ namespace Re
             alignas(16) Math::Vector3 _normal;
             alignas(8)  Math::Vector  _textureCoordinate;
 
+            Vertex()
+                : _position(0.0f), _normal(0.0f), _textureCoordinate(0.0f) {}
+
             Vertex(f32 InX, f32 InY, f32 InZ, f32 InNX, f32 InNY, f32 InNZ, f32 InU, f32 InV)
                 : _position(InX, InY, InZ), _normal(InNX, InNY, InNZ), _textureCoordinate(InU, InV) {}
         };
