@@ -1,5 +1,5 @@
 /*
- * Mesh.hpp
+ * Model.hpp
  *
  * Copyright (c) Giovanni Giacomo. All Rights Reserved.
  *
@@ -14,11 +14,11 @@ namespace Re
 {
     namespace Entities
     {
-        class Mesh : public Core::Entity
+        class Model : public Core::Entity
         {
         public:
-            Mesh();
-            explicit Mesh(const utf8* filename);
+            Model();
+            explicit Model(const utf8* filename);
 
             virtual void Initialize() override;
             virtual void Update(f32 deltaTime) override;

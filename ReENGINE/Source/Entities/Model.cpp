@@ -1,11 +1,11 @@
 /*
- * Mesh.cpp
+ * Model.cpp
  *
  * Copyright (c) Giovanni Giacomo. All Rights Reserved.
  *
  */
 
-#include "Mesh.hpp"
+#include "Model.hpp"
 
 #include "Components/RenderComponent.hpp"
 #include "Graphics/Material.hpp"
@@ -27,21 +27,21 @@ namespace Re
 {
     namespace Entities
     {
-        Mesh::Mesh()
+        Model::Model()
             : _filename(""), _transformComponent(nullptr)
         {
             // Create default components.
             _transformComponent = AddComponent<Components::TransformComponent>();
         }
 
-        Mesh::Mesh(const utf8* filename)
-            : Mesh()
+        Model::Model(const utf8* filename)
+            : Model()
         {
             // Set values as specified.
             _filename = filename;
         }
 
-        void Mesh::Initialize()
+        void Model::Initialize()
         {
             Entity::Initialize();
 
@@ -49,7 +49,7 @@ namespace Re
             Load();
         }
 
-        void Mesh::Update(f32 deltaTime)
+        void Model::Update(f32 deltaTime)
         {
             Entity::Update(deltaTime);
 
@@ -61,12 +61,12 @@ namespace Re
             //_transformComponent->Rotate(0.0f, 0.0f, rotationSpeed * deltaTime);
         }
 
-        void Mesh::Load()
+        void Model::Load()
         {
             if (_filename == "") return;
 
             // Import the scene from file, so that meshes, materials and textures can be imported.
-            const aiScene* scene = assetImporter.ReadFile(_filename, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+            const aiScene* scene = assetImporter.ReadFile(_filename, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices);
             if (scene)
             {
                 // Go through each material and copy them into the ReENGINE format.
@@ -74,6 +74,12 @@ namespace Re
                 for (usize i = 0; i < scene->mNumMaterials; ++i)
                 {
                     aiMaterial* material = scene->mMaterials[i];
+                    f32 specularPower = 0.0f;
+                    f32 specularStrength = 0.0f;
+
+                    // Retrieve properties from material.
+                    material->Get(AI_MATKEY_SHININESS, specularPower);
+                    material->Get(AI_MATKEY_SHININESS_STRENGTH, specularStrength);
 
                     if (material->GetTextureCount(aiTextureType_DIFFUSE))
                     {
@@ -86,7 +92,7 @@ namespace Re
                             boost::shared_ptr<Graphics::Texture> texture = boost::make_shared<Graphics::Texture>(textureFilename.c_str());
 
                             // Create the material using the retrieved parameters and texture.
-                            materials[i] = boost::make_shared<Graphics::Material>(1.0f, 0.0f, texture);
+                            materials[i] = boost::make_shared<Graphics::Material>(specularPower, specularStrength, texture);
                         }
                         else
                         {
@@ -179,7 +185,7 @@ namespace Re
             }
         }
 
-        Components::TransformComponent* Mesh::GetTransform() const
+        Components::TransformComponent* Model::GetTransform() const
         {
             return _transformComponent;
         }

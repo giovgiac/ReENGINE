@@ -43,7 +43,7 @@
     <ClInclude Include="Source\Entities\Cube.hpp" />
     <ClInclude Include="Source\Entities\DirectionalLight.hpp" />
     <ClInclude Include="Source\Entities\Light.hpp" />
-    <ClInclude Include="Source\Entities\Mesh.hpp" />
+    <ClInclude Include="Source\Entities\Model.hpp" />
     <ClInclude Include="Source\Entities\PointLight.hpp" />
     <ClInclude Include="Source\Entities\SpotLight.hpp" />
     <ClInclude Include="Source\Graphics\Material.hpp" />
@@ -89,7 +89,7 @@
     <ClCompile Include="Source\Entities\Cube.cpp" />
     <ClCompile Include="Source\Entities\DirectionalLight.cpp" />
     <ClCompile Include="Source\Entities\Light.cpp" />
-    <ClCompile Include="Source\Entities\Mesh.cpp" />
+    <ClCompile Include="Source\Entities\Model.cpp" />
     <ClCompile Include="Source\Entities\PointLight.cpp" />
     <ClCompile Include="Source\Entities\SpotLight.cpp" />
     <ClCompile Include="Source\Graphics\Material.cpp" />
