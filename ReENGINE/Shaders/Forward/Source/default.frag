@@ -7,6 +7,8 @@ layout(location = 2) in vec2 fragTextureCoordinate;
 layout(location = 3) in vec3 eyeDirection;
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outNormal;
+layout(location = 2) out vec4 outPosition;
 
 // Constant configuration values.
 const uint MAX_POINT_LIGHTS = 4;
@@ -165,4 +167,6 @@ void main()
 
 	// Calculate the final color of the fragment.
 	outColor = texture(textureSampler, fragTextureCoordinate) * vec4(lightColor, 1.0);
+	outNormal = vec4(fragNormal, 1.0);
+	outPosition = vec4(fragPosition, 1.0);
 }

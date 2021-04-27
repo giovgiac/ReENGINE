@@ -43,10 +43,10 @@
 #include <vulkan/vulkan.h>
 
 const usize MAX_FRAME_DRAWS		= 3;
-const usize MAX_RENDERABLES		= 8192;
+const usize MAX_MATERIALS		= 8192;
 const usize MAX_TEXTURES		= 4096;
-const usize MAX_POINT_LIGHTS	= 4;
-const usize MAX_SPOT_LIGHTS		= 4;
+const usize MAX_POINT_LIGHTS	= 32;
+const usize MAX_SPOT_LIGHTS		= 32;
 
 namespace Re
 {
@@ -63,27 +63,43 @@ namespace Re
 		private:
 			// Descriptor-related structures.
 
-			struct VertexUniform 
+			// G-buffer pipeline.
+
+			struct CameraUniform 
 			{
 				alignas(16)	Math::Matrix _projection;
 			} _vertexUniform;
 
-			struct FragmentUniform 
+			struct MaterialUniform 
 			{
-				struct FragmentLight 
+				alignas(4)	f32 _specularPower;
+				alignas(4)	f32 _specularStrength;
+			};
+
+			struct GBufferPush 
+			{
+				alignas(16)	Math::Matrix _view;
+				alignas(16)	Math::Matrix _model;
+			};
+
+			// Lighting pipeline.
+
+			struct LightingUniform
+			{
+				struct FragmentLight
 				{
 					alignas(16)	Math::Vector3 _color;
 					alignas(4)	f32 _ambientStrength;
 					alignas(4)	f32 _diffuseStrength;
 				};
 
-				struct FragmentDirectionalLight 
+				struct FragmentDirectionalLight
 				{
 					alignas(16)	FragmentLight _base;
 					alignas(16) Math::Vector3 _direction;
 				};
 
-				struct FragmentPointLight 
+				struct FragmentPointLight
 				{
 					alignas(16)	FragmentLight _base;
 					alignas(16)	Math::Vector3 _position;
@@ -106,21 +122,9 @@ namespace Re
 				alignas(4)	u32 _spotLightCount;
 			} _fragmentUniform;
 
-			struct FragmentDynamicUniform 
+			struct LightingPush
 			{
-				struct FragmentMaterial 
-				{
-					alignas(4)	f32 _specularPower;
-					alignas(4)	f32 _specularStrength;
-				};
-
-				FragmentMaterial _material;
-			};
-
-			struct VertexPush 
-			{
-				alignas(16)	Math::Matrix _view;
-				alignas(16)	Math::Matrix _model;
+				alignas(16)	Math::Vector3 _eyePosition;
 			};
 
 			// Transfer-related structures.
@@ -181,6 +185,13 @@ namespace Re
 			};
 
 			// Vulkan-related structures.
+
+			struct GBufferImage
+			{
+				VkImage _raw;
+				VkImageView _view;
+				VkDeviceMemory _memory;
+			};
 
 			struct QueueFamilyInfo
 			{
@@ -290,8 +301,8 @@ namespace Re
 			RendererResult CreateRenderPass();
 			RendererResult CreateDescriptorSetLayouts();
 			RendererResult CreatePushConstantRanges();
-			RendererResult CreateGraphicsPipeline();
-			RendererResult CreateDepthBufferImage();
+			RendererResult CreateGraphicsPipelines();
+			RendererResult CreateGBuffer();
 			RendererResult CreateFramebuffers();
 			RendererResult CreateCommandPools();
 			RendererResult CreateCommandBuffers();
@@ -305,21 +316,24 @@ namespace Re
 			RendererResult RecordCommands(usize offset, usize size);
 
 			// Update functions.
-			void UpdateDirectionalLight(FragmentUniform::FragmentDirectionalLight* dstLight, const boost::shared_ptr<Entities::DirectionalLight>& srcLight);
-			void UpdatePointLight(FragmentUniform::FragmentPointLight* dstLight, const boost::shared_ptr<Entities::PointLight>& srcLight);
-			void UpdateSpotLight(FragmentUniform::FragmentSpotLight* dstLight, const boost::shared_ptr<Entities::SpotLight>& srcLight);
-			void UpdateVertexUniformBuffers();
-			void UpdateFragmentUniformBuffers();
-			void UpdateFragmentDynamicUniformBuffers();
+			void UpdateDirectionalLight(LightingUniform::FragmentDirectionalLight* dstLight, const boost::shared_ptr<Entities::DirectionalLight>& srcLight);
+			void UpdatePointLight(LightingUniform::FragmentPointLight* dstLight, const boost::shared_ptr<Entities::PointLight>& srcLight);
+			void UpdateSpotLight(LightingUniform::FragmentSpotLight* dstLight, const boost::shared_ptr<Entities::SpotLight>& srcLight);
+			void UpdateCameraUniformBuffers();
+			void UpdateLightingUniformBuffers();
+			void UpdateMaterialUniformBuffers();
 
 			// Destroy functions.
 			void DestroyCommandPools();
 			void DestroyEntities();
 			void DestroySwapchain();
-			void DestroyDepthBufferImage();
+			void DestroyDescriptorSetLayouts();
+			void DestroyGraphicsPipelines();
+			void DestroyGBuffer();
 			void DestroyFramebuffers();
-			void DestroySynchronization();
 			void DestroyUniformBuffers();
+			void DestroyDescriptorPools();
+			void DestroySynchronization();
 
 			#if PLATFORM_WINDOWS
 			RendererResult CreateWindowsSurface(const Platform::Win32Window& window);
@@ -354,14 +368,19 @@ namespace Re
 			boost::container::vector<VkCommandBuffer> _commandBuffers;
 			usize _currentFrame;
 
-			// Depth-related members.
-			VkImage _depthBufferImage;
-			VkImageView _depthBufferImageView;
-			VkDeviceMemory _depthBufferMemory;
+			// G-Buffer-related members.
+			boost::container::vector<GBufferImage> _colorBuffer;
+			boost::container::vector<GBufferImage> _depthBuffer;
+			boost::container::vector<GBufferImage> _normalBuffer;
+			boost::container::vector<GBufferImage> _positionBuffer;
 
 			// Pipeline-related members.
-			VkPipeline _graphicsPipeline;
-			VkPipelineLayout _pipelineLayout;
+			VkPipeline _gBufferPipeline;
+			VkPipelineLayout _gBufferPipelineLayout;
+
+			VkPipeline _lightingPipeline;
+			VkPipelineLayout _lightingPipelineLayout;
+
 			VkRenderPass _renderPass;
 			VkCommandPool _graphicsPool;
 
@@ -382,21 +401,31 @@ namespace Re
 			// Descriptor-related members.
 			VkDescriptorSetLayout _bufferDescriptorSetLayout;
 			VkDescriptorSetLayout _samplerDescriptorSetLayout;
+			VkDescriptorSetLayout _gBufferDescriptorSetLayout;
+			VkDescriptorSetLayout _lightingDescriptorSetLayout;
 			VkDescriptorPool _bufferDescriptorPool;
 			VkDescriptorPool _samplerDescriptorPool;
+			VkDescriptorPool _gBufferDescriptorPool;
+			VkDescriptorPool _lightingDescriptorPool;
 			boost::container::vector<VkDescriptorSet> _bufferDescriptorSets;
-			boost::container::vector<VkPushConstantRange> _pushConstantRanges;
+			boost::container::vector<VkDescriptorSet> _gBufferDescriptorSets;
+			boost::container::vector<VkDescriptorSet> _lightingDescriptorSets;
+			VkPushConstantRange _gBufferPushConstantRange;
+			VkPushConstantRange _lightingPushConstantRange;
 
 			// Uniform buffer members.
-			boost::container::vector<VkBuffer> _vertexUniformBuffers;
-			boost::container::vector<VkDeviceMemory> _vertexUniformBuffersMemory;
-			boost::container::vector<VkBuffer> _fragmentUniformBuffers;
-			boost::container::vector<VkDeviceMemory> _fragmentUniformBuffersMemory;
-			boost::container::vector<VkBuffer> _fragmentDynamicUniformBuffers;
-			boost::container::vector<VkDeviceMemory> _fragmentDynamicUniformBuffersMemory;
+			boost::container::vector<VkBuffer> _cameraUniformBuffers;
+			boost::container::vector<VkDeviceMemory> _cameraUniformBuffersMemory;
+			boost::container::vector<VkBuffer> _materialUniformBuffers;
+			boost::container::vector<VkDeviceMemory> _materialUniformBuffersMemory;
+			boost::container::vector<VkBuffer> _lightingUniformBuffers;
+			boost::container::vector<VkDeviceMemory> _lightingUniformBuffersMemory;
 
 			// Vulkan configuration members.
+			VkFormat _colorFormat;
 			VkFormat _depthFormat;
+			VkFormat _normalFormat;
+			VkFormat _positionFormat;
 			VkFormat _swapchainFormat;
 			VkExtent2D _swapchainExtent;
 			VkDeviceSize _minUniformBufferAlignment;

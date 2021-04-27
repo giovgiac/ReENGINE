@@ -173,17 +173,17 @@ namespace Re
 			CHECK_RESULT_WITH_ERROR(RetrievePhysicalDevice(), RendererResult::Success, NTEXT("Failed to retrieve appropriate physical device!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateLogicalDevice(), RendererResult::Success, NTEXT("Failed to create logical device!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateSwapchain(), RendererResult::Success, NTEXT("Failed to create swapchain!\n"), RendererResult::Failure)
-			CHECK_RESULT_WITH_ERROR(CreateDepthBufferImage(), RendererResult::Success, NTEXT("Failed to create depth buffer image!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateGBuffer(), RendererResult::Success, NTEXT("Failed to create G-buffer!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateRenderPass(), RendererResult::Success, NTEXT("Failed to create renderpass!\n"), RendererResult::Failure)
-			CHECK_RESULT_WITH_ERROR(CreateDescriptorSetLayouts(), RendererResult::Success, NTEXT("Failed to create descriptor set layout!\n"), RendererResult::Failure)
-			CHECK_RESULT_WITH_ERROR(CreatePushConstantRanges(), RendererResult::Success, NTEXT("Failed to create push constant range!\n"), RendererResult::Failure)
-			CHECK_RESULT_WITH_ERROR(CreateGraphicsPipeline(), RendererResult::Success, NTEXT("Failed to create graphics pipeline!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateDescriptorSetLayouts(), RendererResult::Success, NTEXT("Failed to create descriptor set layouts!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreatePushConstantRanges(), RendererResult::Success, NTEXT("Failed to create push constant ranges!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateGraphicsPipelines(), RendererResult::Success, NTEXT("Failed to create graphics pipelines!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateFramebuffers(), RendererResult::Success, NTEXT("Failed to create framebuffers!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateCommandPools(), RendererResult::Success, NTEXT("Failed to create command pools!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateCommandBuffers(), RendererResult::Success, NTEXT("Failed to create command buffers!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateTextureSampler(), RendererResult::Success, NTEXT("Failed to create texture sampler!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateUniformBuffers(), RendererResult::Success, NTEXT("Failed to create uniform buffers!\n"), RendererResult::Failure)
-			CHECK_RESULT_WITH_ERROR(CreateDescriptorPools(), RendererResult::Success, NTEXT("Failed to create descriptor pool!\n"), RendererResult::Failure)
+			CHECK_RESULT_WITH_ERROR(CreateDescriptorPools(), RendererResult::Success, NTEXT("Failed to create descriptor pools!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateDescriptorSets(), RendererResult::Success, NTEXT("Failed to create descriptor sets!\n"), RendererResult::Failure)
 			CHECK_RESULT_WITH_ERROR(CreateSynchronization(), RendererResult::Success, NTEXT("Failed to create synchronization!\n"), RendererResult::Failure)
 
@@ -206,18 +206,15 @@ namespace Re
 			
 			DestroyEntities();
 			DestroySynchronization();
-			vkDestroyDescriptorPool(_device._logical, _samplerDescriptorPool, nullptr);
-			vkDestroyDescriptorPool(_device._logical, _bufferDescriptorPool, nullptr);
-			vkDestroyDescriptorSetLayout(_device._logical, _samplerDescriptorSetLayout, nullptr);
-			vkDestroyDescriptorSetLayout(_device._logical, _bufferDescriptorSetLayout, nullptr);
+			DestroyDescriptorPools();
+			DestroyDescriptorSetLayouts();
 			DestroyUniformBuffers();
 			vkDestroySampler(_device._logical, _textureSampler, nullptr);
 			DestroyCommandPools();
 			DestroyFramebuffers();
-			vkDestroyPipeline(_device._logical, _graphicsPipeline, nullptr);
-			vkDestroyPipelineLayout(_device._logical, _pipelineLayout, nullptr);
+			DestroyGraphicsPipelines();
 			vkDestroyRenderPass(_device._logical, _renderPass, nullptr);
-			DestroyDepthBufferImage();
+			DestroyGBuffer();
 			DestroySwapchain();
 			vkDestroyDevice(_device._logical, nullptr);
 			vkDestroySurfaceKHR(_instance, _surface, nullptr);
@@ -233,13 +230,13 @@ namespace Re
 			UpdateDirectionalLight(&_fragmentUniform._directionalLight, light);
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers();
+			UpdateLightingUniformBuffers();
 
 			// Store specified light as active light.
 			_directionalLight = light;
 			_directionalLight->OnParameterChanged.connect([this]() {
 				UpdateDirectionalLight(&_fragmentUniform._directionalLight, _directionalLight);
-				UpdateFragmentUniformBuffers();
+				UpdateLightingUniformBuffers();
 			});
 
 			return RendererResult::Success;
@@ -278,13 +275,13 @@ namespace Re
 			_fragmentUniform._pointLightCount = lightCount;
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers();
+			UpdateLightingUniformBuffers();
 
 			// Add new light to the list of point lights.
 			_pointLights[availableIndex] = light;
 			_pointLights[availableIndex]->OnParameterChanged.connect([this, availableIndex]() {
 				UpdatePointLight(&_fragmentUniform._pointLights[availableIndex], _pointLights[availableIndex]);
-				UpdateFragmentUniformBuffers();
+				UpdateLightingUniformBuffers();
 			});
 
 			return RendererResult::Success;
@@ -323,13 +320,13 @@ namespace Re
 			_fragmentUniform._spotLightCount = lightCount;
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers();
+			UpdateLightingUniformBuffers();
 
 			// Add new light to the list of spot lights.
 			_spotLights[availableIndex] = light;
 			_spotLights[availableIndex]->OnParameterChanged.connect([this, availableIndex]() {
 				UpdateSpotLight(&_fragmentUniform._spotLights[availableIndex], _spotLights[availableIndex]);
-				UpdateFragmentUniformBuffers();
+				UpdateLightingUniformBuffers();
 			});
 
 			return RendererResult::Success;
@@ -350,7 +347,7 @@ namespace Re
 			}
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers();
+			UpdateLightingUniformBuffers();
 		}
 
 		void Renderer::DeactivateLight(const boost::shared_ptr<Entities::SpotLight>& light)
@@ -368,7 +365,7 @@ namespace Re
 			}
 
 			// Update the fragment uniform buffer values.
-			UpdateFragmentUniformBuffers();
+			UpdateLightingUniformBuffers();
 		}
 
 		void Renderer::SetActiveCamera(const boost::shared_ptr<Entities::Camera>& newCamera)
@@ -377,7 +374,7 @@ namespace Re
 			_vertexUniform._projection = newCamera->GetProjection(static_cast<f32>(_swapchainExtent.width) / static_cast<f32>(_swapchainExtent.height));
 			
 			// Update the uniform buffer values.
-			UpdateVertexUniformBuffers();
+			UpdateCameraUniformBuffers();
 
 			// Store specified camera as active camera.
 			_activeCamera = newCamera;
@@ -1264,7 +1261,7 @@ namespace Re
 
 			// TODO: In the future, record secondary command buffers for static objects.
 			
-			UpdateFragmentDynamicUniformBuffers();
+			UpdateMaterialUniformBuffers();
 
 			// Wait until the transfer operations are completed before proceeding.
 			CHECK_RESULT(vkQueueWaitIdle(_transferQueue), VK_SUCCESS, RendererResult::Failure);
@@ -1646,18 +1643,22 @@ namespace Re
 
 		RendererResult Renderer::CreateRenderPass()
 		{
-			// Color attachment of the render pass.
+			boost::array<VkSubpassDescription, 2> subpassDescriptions = {};
+
+			// SUBPASS 1
+
+			// Color attachment of the first subpass.
 			VkAttachmentDescription colorAttachment = {};
-			colorAttachment.format = _swapchainFormat;
+			colorAttachment.format = _colorFormat;
 			colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
 			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-			colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 			colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 			colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-			// Depth attachment of the render pass.
+			// Depth attachment of the first subpass.
 			VkAttachmentDescription depthAttachment = {};
 			depthAttachment.format = _depthFormat;
 			depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -1668,25 +1669,94 @@ namespace Re
 			depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 			depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-			// Attachment reference for color attachment of the subpass.
+			// Normal attachment of the first subpass.
+			VkAttachmentDescription normalAttachment = {};
+			normalAttachment.format = _normalFormat;
+			normalAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+			normalAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			normalAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			normalAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			normalAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			normalAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			normalAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			// Position attachment of the first subpass.
+			VkAttachmentDescription positionAttachment = {};
+			positionAttachment.format = _positionFormat;
+			positionAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+			positionAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			positionAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			positionAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			positionAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			positionAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			positionAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			// Reference for color attachment of the first subpass.
 			VkAttachmentReference colorReference = {};
 			colorReference.attachment = 0;
 			colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-			// Attachment reference for depth attachment of the subpass.
+			// Reference for depth attachment of the first subpass.
 			VkAttachmentReference depthReference = {};
 			depthReference.attachment = 1;
 			depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-			// Subpass description for this render pass.
-			VkSubpassDescription subpass = {};
-			subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-			subpass.colorAttachmentCount = 1;
-			subpass.pColorAttachments = &colorReference;
-			subpass.pDepthStencilAttachment = &depthReference;
+			// Reference for normal attachment of the first subpass.
+			VkAttachmentReference normalReference = {};
+			normalReference.attachment = 2;
+			normalReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			// Reference for position attachment of the first subpass.
+			VkAttachmentReference positionReference = {};
+			positionReference.attachment = 3;
+			positionReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			// Assemble color and normal attachments into an array.
+			boost::array<VkAttachmentReference, 3> colorReferences = {
+				colorReference, normalReference, positionReference
+			};
+
+			// Description for the first subpass.
+			subpassDescriptions[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+			subpassDescriptions[0].colorAttachmentCount = static_cast<u32>(colorReferences.size());
+			subpassDescriptions[0].pColorAttachments = colorReferences.data();
+			subpassDescriptions[0].pDepthStencilAttachment = &depthReference;
+
+			// SUBPASS 2
+
+			// Output attachment of the second subpass.
+			VkAttachmentDescription swapchainAttachment = {};
+			swapchainAttachment.format = _swapchainFormat;
+			swapchainAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+			swapchainAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+			swapchainAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+			swapchainAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			swapchainAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+			swapchainAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			swapchainAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+			// Attachment reference for color attachment of the subpass.
+			VkAttachmentReference swapchainReference = {};
+			swapchainReference.attachment = 4;
+			swapchainReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+			// Create attachment references to first subpass.
+			boost::array<VkAttachmentReference, 4> inputReferences;
+			for (usize i = 0; i < inputReferences.size(); ++i)
+			{
+				inputReferences[i].attachment = i;
+				inputReferences[i].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			}
+
+			// Description for the second subpass.
+			subpassDescriptions[1].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+			subpassDescriptions[1].colorAttachmentCount = 1;
+			subpassDescriptions[1].pColorAttachments = &swapchainReference;
+			subpassDescriptions[1].inputAttachmentCount = static_cast<u32>(inputReferences.size());
+			subpassDescriptions[1].pInputAttachments = inputReferences.data();
 
 			// Need to determine when layout transition occurs through subpass dependencies.
-			boost::container::vector<VkSubpassDependency> subpassDependencies(2);
+			boost::array<VkSubpassDependency, 3> subpassDependencies;
 
 			// Conversion from VK_IMAGE_LAYOUT_UNDEFINED to VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 			subpassDependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -1697,19 +1767,27 @@ namespace Re
 			subpassDependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 			subpassDependencies[0].dependencyFlags = 0;
 
-			// Conversion from VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+			// Conversion from VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 			subpassDependencies[1].srcSubpass = 0;
 			subpassDependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-			subpassDependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-			subpassDependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-			subpassDependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-			subpassDependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			subpassDependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			subpassDependencies[1].dstSubpass = 1;
+			subpassDependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			subpassDependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 			subpassDependencies[1].dependencyFlags = 0;
 
+			// Conversion from VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+			subpassDependencies[2].srcSubpass = 1;
+			subpassDependencies[2].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			subpassDependencies[2].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+			subpassDependencies[2].dstSubpass = VK_SUBPASS_EXTERNAL;
+			subpassDependencies[2].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+			subpassDependencies[2].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+			subpassDependencies[2].dependencyFlags = 0;
+
 			// Assemble vector of attachments.
-			boost::array<VkAttachmentDescription, 2> attachments = { 
-				colorAttachment, 
-				depthAttachment 
+			boost::array<VkAttachmentDescription, 5> attachments = { 
+				colorAttachment, depthAttachment, normalAttachment, positionAttachment, swapchainAttachment
 			};
 
 			// Render pass creation information.
@@ -1717,8 +1795,8 @@ namespace Re
 			renderCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 			renderCreateInfo.attachmentCount = static_cast<u32>(attachments.size());
 			renderCreateInfo.pAttachments = attachments.data();
-			renderCreateInfo.subpassCount = 1;
-			renderCreateInfo.pSubpasses = &subpass;
+			renderCreateInfo.subpassCount = static_cast<u32>(subpassDescriptions.size());
+			renderCreateInfo.pSubpasses = subpassDescriptions.data();
 			renderCreateInfo.dependencyCount = static_cast<u32>(subpassDependencies.size());
 			renderCreateInfo.pDependencies = subpassDependencies.data();
 			
@@ -1728,35 +1806,27 @@ namespace Re
 
 		RendererResult Renderer::CreateDescriptorSetLayouts()
 		{
-			// BUFFER DESCRIPTOR SET LAYOUT
+			// BUFFER DESCRIPTOR SET LAYOUT (G-BUFFER PIPELINE)
 
 			// Descriptor set layout bindings information of the vertex uniform.
-			VkDescriptorSetLayoutBinding vertexUniformLayoutBinding = {};
-			vertexUniformLayoutBinding.binding = 0;
-			vertexUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			vertexUniformLayoutBinding.descriptorCount = 1;
-			vertexUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-			vertexUniformLayoutBinding.pImmutableSamplers = nullptr;
-
-			// Descriptor set layout bindings information of the fragment uniform.
-			VkDescriptorSetLayoutBinding fragmentUniformLayoutBinding = {};
-			fragmentUniformLayoutBinding.binding = 1;
-			fragmentUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			fragmentUniformLayoutBinding.descriptorCount = 1;
-			fragmentUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			fragmentUniformLayoutBinding.pImmutableSamplers = nullptr;
+			VkDescriptorSetLayoutBinding cameraUniformLayoutBinding = {};
+			cameraUniformLayoutBinding.binding = 0;
+			cameraUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			cameraUniformLayoutBinding.descriptorCount = 1;
+			cameraUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+			cameraUniformLayoutBinding.pImmutableSamplers = nullptr;
 
 			// Descriptor set layout bindings information of the fragment dynamic uniform.
-			VkDescriptorSetLayoutBinding fragmentDynamicUniformLayoutBinding = {};
-			fragmentDynamicUniformLayoutBinding.binding = 2;
-			fragmentDynamicUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-			fragmentDynamicUniformLayoutBinding.descriptorCount = 1;
-			fragmentDynamicUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-			fragmentDynamicUniformLayoutBinding.pImmutableSamplers = nullptr;
+			VkDescriptorSetLayoutBinding materialUniformLayoutBinding = {};
+			materialUniformLayoutBinding.binding = 1;
+			materialUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+			materialUniformLayoutBinding.descriptorCount = 1;
+			materialUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			materialUniformLayoutBinding.pImmutableSamplers = nullptr;
 
 			// Assemble the binding informations into an array.
-			boost::array<VkDescriptorSetLayoutBinding, 3> bufferLayoutBindings = {
-				vertexUniformLayoutBinding, fragmentUniformLayoutBinding, fragmentDynamicUniformLayoutBinding
+			boost::array<VkDescriptorSetLayoutBinding, 2> bufferLayoutBindings = {
+				cameraUniformLayoutBinding, materialUniformLayoutBinding
 			};
 
 			// Buffer descriptor set layout creation information.
@@ -1767,7 +1837,7 @@ namespace Re
 
 			CHECK_RESULT(vkCreateDescriptorSetLayout(_device._logical, &bufferLayoutCreateInfo, nullptr, &_bufferDescriptorSetLayout), VK_SUCCESS, RendererResult::Failure)
 			
-			// SAMPLER DESCRIPTOR SET LAYOUT
+			// SAMPLER DESCRIPTOR SET LAYOUT (G-BUFFER PIPELINE)
 
 			// Descriptor set layout bindings information of the texture sampler.
 			VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
@@ -1784,51 +1854,120 @@ namespace Re
 			samplerLayoutCreateInfo.pBindings = &samplerLayoutBinding;
 
 			CHECK_RESULT(vkCreateDescriptorSetLayout(_device._logical, &samplerLayoutCreateInfo, nullptr, &_samplerDescriptorSetLayout), VK_SUCCESS, RendererResult::Failure)
-				
+
+			// G-BUFFER DESCRIPTOR SET LAYOUT (LIGHTING PIPELINE)
+
+			// Descriptor set layout binding of the color image.
+			VkDescriptorSetLayoutBinding colorLayoutBinding = {};
+			colorLayoutBinding.binding = 0;
+			colorLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			colorLayoutBinding.descriptorCount = 1;
+			colorLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			colorLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Descriptor set layout binding of the depth image.
+			VkDescriptorSetLayoutBinding depthLayoutBinding = {};
+			depthLayoutBinding.binding = 1;
+			depthLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			depthLayoutBinding.descriptorCount = 1;
+			depthLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			depthLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Descriptor set layout binding of the normal image.
+			VkDescriptorSetLayoutBinding normalLayoutBinding = {};
+			normalLayoutBinding.binding = 2;
+			normalLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			normalLayoutBinding.descriptorCount = 1;
+			normalLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			normalLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Descriptor set layout binding of the position image.
+			VkDescriptorSetLayoutBinding positionLayoutBinding = {};
+			positionLayoutBinding.binding = 3;
+			positionLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			positionLayoutBinding.descriptorCount = 1;
+			positionLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			positionLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Assemble descriptor set layout bindings into an array.
+			boost::array<VkDescriptorSetLayoutBinding, 4> gBufferLayoutBindings = {
+				colorLayoutBinding, depthLayoutBinding, normalLayoutBinding, positionLayoutBinding
+			};
+
+			// G-buffer descriptor set layout creation information.
+			VkDescriptorSetLayoutCreateInfo gBufferLayoutCreateInfo = {};
+			gBufferLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			gBufferLayoutCreateInfo.bindingCount = static_cast<u32>(gBufferLayoutBindings.size());
+			gBufferLayoutCreateInfo.pBindings = gBufferLayoutBindings.data();
+
+			CHECK_RESULT(vkCreateDescriptorSetLayout(_device._logical, &gBufferLayoutCreateInfo, nullptr, &_gBufferDescriptorSetLayout), VK_SUCCESS, RendererResult::Failure)
+
+			// LIGHTING DESCRIPTOR SET LAYOUT (LIGHTING PIPELINE)
+
+			// Descriptor set layout bindings information of the fragment uniform.
+			VkDescriptorSetLayoutBinding lightingUniformLayoutBinding = {};
+			lightingUniformLayoutBinding.binding = 0;
+			lightingUniformLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			lightingUniformLayoutBinding.descriptorCount = 1;
+			lightingUniformLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			lightingUniformLayoutBinding.pImmutableSamplers = nullptr;
+
+			// Lighting descriptor set layout creation information.
+			VkDescriptorSetLayoutCreateInfo lightingLayoutCreateInfo = {};
+			lightingLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			lightingLayoutCreateInfo.bindingCount = 1;
+			lightingLayoutCreateInfo.pBindings = &lightingUniformLayoutBinding;
+
+			CHECK_RESULT(vkCreateDescriptorSetLayout(_device._logical, &lightingLayoutCreateInfo, nullptr, &_lightingDescriptorSetLayout), VK_SUCCESS, RendererResult::Failure)
+
 			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::CreatePushConstantRanges()
 		{
-			// Resize the push constant range vector to hold all constants.
-			_pushConstantRanges.resize(1);
+			// Configure the values for the G-buffer push constant.
+			_gBufferPushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+			_gBufferPushConstantRange.offset = 0;
+			_gBufferPushConstantRange.size = sizeof(GBufferPush);
 
-			// Configure the values for the vertex push constant.
-			_pushConstantRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-			_pushConstantRanges[0].offset = 0;
-			_pushConstantRanges[0].size = sizeof(VertexPush);
+			// Configure the values for the lighting push constant.
+			_lightingPushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+			_lightingPushConstantRange.offset = 0;
+			_lightingPushConstantRange.size = sizeof(LightingPush);
 
 			return RendererResult::Success;
 		}
 
-		RendererResult Renderer::CreateGraphicsPipeline()
+		RendererResult Renderer::CreateGraphicsPipelines()
 		{
-			boost::container::vector<char> fragmentShaderRaw, vertexShaderRaw;
-			CHECK_RESULT(ReadShader("Shaders/vert.spv", &vertexShaderRaw), RendererResult::Success, RendererResult::Failure)
-			CHECK_RESULT(ReadShader("Shaders/frag.spv", &fragmentShaderRaw), RendererResult::Success, RendererResult::Failure)
+			// G-BUFFER GRAPHICS PIPELINE
+
+			boost::container::vector<char> gBufferVertexShaderRaw, gBufferFragmentShaderRaw;
+			CHECK_RESULT(ReadShader("Shaders/Deferred/gbuffer.vert.spv", &gBufferVertexShaderRaw), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(ReadShader("Shaders/Deferred/gbuffer.frag.spv", &gBufferFragmentShaderRaw), RendererResult::Success, RendererResult::Failure)
 
 			// Create shader modules.
-			VkShaderModule fragmentShader, vertexShader;
-			CHECK_RESULT(CreateShaderModule(vertexShaderRaw, &vertexShader), RendererResult::Success, RendererResult::Failure)
-			CHECK_RESULT(CreateShaderModule(fragmentShaderRaw, &fragmentShader), RendererResult::Success, RendererResult::Failure)
+			VkShaderModule gBufferVertexShader, gBufferFragmentShader;
+			CHECK_RESULT(CreateShaderModule(gBufferVertexShaderRaw, &gBufferVertexShader), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(CreateShaderModule(gBufferFragmentShaderRaw, &gBufferFragmentShader), RendererResult::Success, RendererResult::Failure)
 
 			// Vertex stage creation information.
-			VkPipelineShaderStageCreateInfo vertexCreateInfo = {};
-			vertexCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-			vertexCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-			vertexCreateInfo.module = vertexShader;
-			vertexCreateInfo.pName = "main";
+			VkPipelineShaderStageCreateInfo gBufferVertexCreateInfo = {};
+			gBufferVertexCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			gBufferVertexCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+			gBufferVertexCreateInfo.module = gBufferVertexShader;
+			gBufferVertexCreateInfo.pName = "main";
 
 			// Fragment stage creation information.
-			VkPipelineShaderStageCreateInfo fragmentCreateInfo = {};
-			fragmentCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-			fragmentCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-			fragmentCreateInfo.module = fragmentShader;
-			fragmentCreateInfo.pName = "main";
+			VkPipelineShaderStageCreateInfo gBufferFragmentCreateInfo = {};
+			gBufferFragmentCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			gBufferFragmentCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			gBufferFragmentCreateInfo.module = gBufferFragmentShader;
+			gBufferFragmentCreateInfo.pName = "main";
 
 			VkPipelineShaderStageCreateInfo shaderStages[] = {
-				vertexCreateInfo,
-				fragmentCreateInfo
+				gBufferVertexCreateInfo,
+				gBufferFragmentCreateInfo
 			};
 
 			/* Create graphics pipeline. */
@@ -1836,48 +1975,48 @@ namespace Re
 			#pragma region Vertex Input Stage
 
 			// Definitions of how data for a single vertex is a whole.
-			VkVertexInputBindingDescription bindingDescription = {};
-			bindingDescription.binding = 0;
-			bindingDescription.stride = sizeof(Vertex);
-			bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+			VkVertexInputBindingDescription gBufferBindingDescription = {};
+			gBufferBindingDescription.binding = 0;
+			gBufferBindingDescription.stride = sizeof(Vertex);
+			gBufferBindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 			// How the data for an attribute is defined within the vertex.
-			boost::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
+			boost::array<VkVertexInputAttributeDescription, 3> gBufferAttributeDescriptions = {};
 
 			// Position attribute.
-			attributeDescriptions[0].binding = 0;
-			attributeDescriptions[0].location = 0;
-			attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attributeDescriptions[0].offset = offsetof(Vertex, _position);
+			gBufferAttributeDescriptions[0].binding = 0;
+			gBufferAttributeDescriptions[0].location = 0;
+			gBufferAttributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
+			gBufferAttributeDescriptions[0].offset = offsetof(Vertex, _position);
 			
 			// Normal attribute.
-			attributeDescriptions[1].binding = 0;
-			attributeDescriptions[1].location = 1;
-			attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-			attributeDescriptions[1].offset = offsetof(Vertex, _normal);
+			gBufferAttributeDescriptions[1].binding = 0;
+			gBufferAttributeDescriptions[1].location = 1;
+			gBufferAttributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+			gBufferAttributeDescriptions[1].offset = offsetof(Vertex, _normal);
 
 			// Texture coordinate attribute.
-			attributeDescriptions[2].binding = 0;
-			attributeDescriptions[2].location = 2;
-			attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-			attributeDescriptions[2].offset = offsetof(Vertex, _textureCoordinate);
+			gBufferAttributeDescriptions[2].binding = 0;
+			gBufferAttributeDescriptions[2].location = 2;
+			gBufferAttributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+			gBufferAttributeDescriptions[2].offset = offsetof(Vertex, _textureCoordinate);
 
 			// Vertex input stage.
-			VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
-			vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-			vertexInputCreateInfo.vertexBindingDescriptionCount = 1;
-			vertexInputCreateInfo.pVertexBindingDescriptions = &bindingDescription;
-			vertexInputCreateInfo.vertexAttributeDescriptionCount = static_cast<u32>(attributeDescriptions.size());
-			vertexInputCreateInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+			VkPipelineVertexInputStateCreateInfo gBufferVertexInputCreateInfo = {};
+			gBufferVertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+			gBufferVertexInputCreateInfo.vertexBindingDescriptionCount = 1;
+			gBufferVertexInputCreateInfo.pVertexBindingDescriptions = &gBufferBindingDescription;
+			gBufferVertexInputCreateInfo.vertexAttributeDescriptionCount = static_cast<u32>(gBufferAttributeDescriptions.size());
+			gBufferVertexInputCreateInfo.pVertexAttributeDescriptions = gBufferAttributeDescriptions.data();
 
 			#pragma endregion
 			#pragma region Input Assembly Stage
 
 			// Input assembly stage.
-			VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {};
-			inputAssemblyCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-			inputAssemblyCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-			inputAssemblyCreateInfo.primitiveRestartEnable = VK_FALSE;
+			VkPipelineInputAssemblyStateCreateInfo gBufferInputAssemblyCreateInfo = {};
+			gBufferInputAssemblyCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+			gBufferInputAssemblyCreateInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			gBufferInputAssemblyCreateInfo.primitiveRestartEnable = VK_FALSE;
 
 			#pragma endregion
 			#pragma region Viewport and Scissors Stage
@@ -1885,151 +2024,271 @@ namespace Re
 			// Viewport and scissors stage.
 
 			// Create the viewport info.
-			VkViewport viewport = {};
-			viewport.x = 0.0f;
-			viewport.y = 0.0f;
-			viewport.width = static_cast<float>(_swapchainExtent.width);
-			viewport.height = static_cast<float>(_swapchainExtent.height);
-			viewport.minDepth = 0.0f;
-			viewport.maxDepth = 1.0f;
+			VkViewport gBufferViewport = {};
+			gBufferViewport.x = 0.0f;
+			gBufferViewport.y = 0.0f;
+			gBufferViewport.width = static_cast<float>(_swapchainExtent.width);
+			gBufferViewport.height = static_cast<float>(_swapchainExtent.height);
+			gBufferViewport.minDepth = 0.0f;
+			gBufferViewport.maxDepth = 1.0f;
 
 			// Create the scissor info. (specifies what is visible)
-			VkRect2D scissor = {};
-			scissor.offset = { 0, 0 };
-			scissor.extent = _swapchainExtent;
+			VkRect2D gBufferScissor = {};
+			gBufferScissor.offset = { 0, 0 };
+			gBufferScissor.extent = _swapchainExtent;
 
 			// Create the viewport and scissors state info.
-			VkPipelineViewportStateCreateInfo viewportCreateInfo = {};
-			viewportCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-			viewportCreateInfo.viewportCount = 1;
-			viewportCreateInfo.pViewports = &viewport;
-			viewportCreateInfo.scissorCount = 1;
-			viewportCreateInfo.pScissors = &scissor;
+			VkPipelineViewportStateCreateInfo gBufferViewportCreateInfo = {};
+			gBufferViewportCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+			gBufferViewportCreateInfo.viewportCount = 1;
+			gBufferViewportCreateInfo.pViewports = &gBufferViewport;
+			gBufferViewportCreateInfo.scissorCount = 1;
+			gBufferViewportCreateInfo.pScissors = &gBufferScissor;
 
 			#pragma endregion
 			#pragma region Rasterization Stage
 
 			// Rasterization stage.
-			VkPipelineRasterizationStateCreateInfo rasterCreateInfo = {};
-			rasterCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-			rasterCreateInfo.depthClampEnable = VK_FALSE;
-			rasterCreateInfo.rasterizerDiscardEnable = VK_FALSE;
-			rasterCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
-			rasterCreateInfo.lineWidth = 1.0f;
-			rasterCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
-			rasterCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-			rasterCreateInfo.depthBiasEnable = VK_FALSE;
+			VkPipelineRasterizationStateCreateInfo gBufferRasterCreateInfo = {};
+			gBufferRasterCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+			gBufferRasterCreateInfo.depthClampEnable = VK_FALSE;
+			gBufferRasterCreateInfo.rasterizerDiscardEnable = VK_FALSE;
+			gBufferRasterCreateInfo.polygonMode = VK_POLYGON_MODE_FILL;
+			gBufferRasterCreateInfo.lineWidth = 1.0f;
+			gBufferRasterCreateInfo.cullMode = VK_CULL_MODE_BACK_BIT;
+			gBufferRasterCreateInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+			gBufferRasterCreateInfo.depthBiasEnable = VK_FALSE;
 
 			#pragma endregion
 			#pragma region Multisampling Stage
 
 			// Multisampling stage.
-			VkPipelineMultisampleStateCreateInfo multisampleCreateInfo = {};
-			multisampleCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-			multisampleCreateInfo.sampleShadingEnable = VK_FALSE;
-			multisampleCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+			VkPipelineMultisampleStateCreateInfo gBufferMultisampleCreateInfo = {};
+			gBufferMultisampleCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+			gBufferMultisampleCreateInfo.sampleShadingEnable = VK_FALSE;
+			gBufferMultisampleCreateInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
 			#pragma endregion
 			#pragma region Blending Stage
 
 			// Blending attachment information.
-			VkPipelineColorBlendAttachmentState blendState = {};
-			blendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | 
+			VkPipelineColorBlendAttachmentState gBufferBlendState = {};
+			gBufferBlendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
 				VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-			blendState.blendEnable = VK_TRUE;
-			blendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-			blendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-			blendState.alphaBlendOp = VK_BLEND_OP_ADD;
-			blendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-			blendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-			blendState.colorBlendOp = VK_BLEND_OP_ADD;
+			gBufferBlendState.blendEnable = VK_FALSE;
+			//gBufferBlendState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			//gBufferBlendState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			//gBufferBlendState.alphaBlendOp = VK_BLEND_OP_ADD;
+			//gBufferBlendState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			//gBufferBlendState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			//gBufferBlendState.colorBlendOp = VK_BLEND_OP_ADD;
 
 			// Using following equation for blending:
 			// (VK_BLEND_FACTOR_SRC_ALPHA * newColor) + (VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA * oldColor)
 
+			// Replicate blend state for all color attachments.
+			boost::container::vector<VkPipelineColorBlendAttachmentState> gBufferBlendStates(3, gBufferBlendState);
+
 			// Blending stage creation information.
-			VkPipelineColorBlendStateCreateInfo blendCreateInfo = {};
-			blendCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-			blendCreateInfo.logicOpEnable = VK_FALSE;
-			blendCreateInfo.attachmentCount = 1;
-			blendCreateInfo.pAttachments = &blendState;
+			VkPipelineColorBlendStateCreateInfo gBufferBlendCreateInfo = {};
+			gBufferBlendCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			gBufferBlendCreateInfo.logicOpEnable = VK_FALSE;
+			gBufferBlendCreateInfo.attachmentCount = static_cast<u32>(gBufferBlendStates.size());
+			gBufferBlendCreateInfo.pAttachments = gBufferBlendStates.data();
+
+			#pragma region Depth Stencil Stage
+
+			// TODO: Setup depth stencil testing
+			VkPipelineDepthStencilStateCreateInfo gBufferDepthCreateInfo = {};
+			gBufferDepthCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+			gBufferDepthCreateInfo.depthTestEnable = VK_TRUE;
+			gBufferDepthCreateInfo.depthWriteEnable = VK_TRUE;
+			gBufferDepthCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS;
+			gBufferDepthCreateInfo.depthBoundsTestEnable = VK_FALSE;
+			gBufferDepthCreateInfo.stencilTestEnable = VK_FALSE;
+
+			#pragma endregion
 
 			#pragma endregion
 			#pragma region Pipeline Layout Stage
 
 			// Assemble pipeline layouts into an array.
-			boost::array<VkDescriptorSetLayout, 2> descriptorSetLayouts = {
+			boost::array<VkDescriptorSetLayout, 2> gBufferDescriptorSetLayouts = {
 				_bufferDescriptorSetLayout, _samplerDescriptorSetLayout
 			};
 
 			// Pipeline layout stage creation information.
-			VkPipelineLayoutCreateInfo layoutCreateInfo = {};
-			layoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			layoutCreateInfo.setLayoutCount = static_cast<u32>(descriptorSetLayouts.size());
-			layoutCreateInfo.pSetLayouts = descriptorSetLayouts.data();
-			layoutCreateInfo.pushConstantRangeCount = static_cast<u32>(_pushConstantRanges.size());
-			layoutCreateInfo.pPushConstantRanges = _pushConstantRanges.data();
+			VkPipelineLayoutCreateInfo gBufferLayoutCreateInfo = {};
+			gBufferLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			gBufferLayoutCreateInfo.setLayoutCount = static_cast<u32>(gBufferDescriptorSetLayouts.size());
+			gBufferLayoutCreateInfo.pSetLayouts = gBufferDescriptorSetLayouts.data();
+			gBufferLayoutCreateInfo.pushConstantRangeCount = 1;
+			gBufferLayoutCreateInfo.pPushConstantRanges = &_gBufferPushConstantRange;
 
 			// Create pipeline layout.
-			CHECK_RESULT(vkCreatePipelineLayout(_device._logical, &layoutCreateInfo, nullptr, &_pipelineLayout), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkCreatePipelineLayout(_device._logical, &gBufferLayoutCreateInfo, nullptr, &_gBufferPipelineLayout), VK_SUCCESS, RendererResult::Failure)
 			
-			#pragma endregion
-
-			#pragma region Depth Stencil Stage
-
-			// TODO: Setup depth stencil testing
-			VkPipelineDepthStencilStateCreateInfo depthCreateInfo = {};
-			depthCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-			depthCreateInfo.depthTestEnable = VK_TRUE;
-			depthCreateInfo.depthWriteEnable = VK_TRUE;
-			depthCreateInfo.depthCompareOp = VK_COMPARE_OP_LESS;
-			depthCreateInfo.depthBoundsTestEnable = VK_FALSE;
-			depthCreateInfo.stencilTestEnable = VK_FALSE;
-
 			#pragma endregion
 
 			// Create graphics pipeline information.
-			VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-			pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-			pipelineCreateInfo.stageCount = 2;
-			pipelineCreateInfo.pStages = shaderStages;
-			pipelineCreateInfo.pVertexInputState = &vertexInputCreateInfo;
-			pipelineCreateInfo.pInputAssemblyState = &inputAssemblyCreateInfo;
-			pipelineCreateInfo.pViewportState = &viewportCreateInfo;
-			pipelineCreateInfo.pDynamicState = nullptr;
-			pipelineCreateInfo.pRasterizationState = &rasterCreateInfo;
-			pipelineCreateInfo.pMultisampleState = &multisampleCreateInfo;
-			pipelineCreateInfo.pColorBlendState = &blendCreateInfo;
-			pipelineCreateInfo.pDepthStencilState = &depthCreateInfo;
-			pipelineCreateInfo.layout = _pipelineLayout;
-			pipelineCreateInfo.renderPass = _renderPass;							// Render pass it is compatible with.
-			pipelineCreateInfo.subpass = 0;											// Subpass of the render pass that it will use.
+			VkGraphicsPipelineCreateInfo gBufferPipelineCreateInfo = {};
+			gBufferPipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+			gBufferPipelineCreateInfo.stageCount = 2;
+			gBufferPipelineCreateInfo.pStages = shaderStages;
+			gBufferPipelineCreateInfo.pVertexInputState = &gBufferVertexInputCreateInfo;
+			gBufferPipelineCreateInfo.pInputAssemblyState = &gBufferInputAssemblyCreateInfo;
+			gBufferPipelineCreateInfo.pViewportState = &gBufferViewportCreateInfo;
+			gBufferPipelineCreateInfo.pDynamicState = nullptr;
+			gBufferPipelineCreateInfo.pRasterizationState = &gBufferRasterCreateInfo;
+			gBufferPipelineCreateInfo.pMultisampleState = &gBufferMultisampleCreateInfo;
+			gBufferPipelineCreateInfo.pColorBlendState = &gBufferBlendCreateInfo;
+			gBufferPipelineCreateInfo.pDepthStencilState = &gBufferDepthCreateInfo;
+			gBufferPipelineCreateInfo.layout = _gBufferPipelineLayout;
+			gBufferPipelineCreateInfo.renderPass = _renderPass;							// Render pass it is compatible with.
+			gBufferPipelineCreateInfo.subpass = 0;											// Subpass of the render pass that it will use.
 
 			// Derivative graphics pipelines (use these attributes to base a pipeline onto another).
-			pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
-			pipelineCreateInfo.basePipelineIndex = -1;
+			gBufferPipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
+			gBufferPipelineCreateInfo.basePipelineIndex = -1;
 
-			CHECK_RESULT(vkCreateGraphicsPipelines(_device._logical, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &_graphicsPipeline), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkCreateGraphicsPipelines(_device._logical, VK_NULL_HANDLE, 1, &gBufferPipelineCreateInfo, nullptr, &_gBufferPipeline), VK_SUCCESS, RendererResult::Failure)
 			
-			// Destroy shader modules (no longer needed after creating pipeline).
-			vkDestroyShaderModule(_device._logical, fragmentShader, nullptr);
-			vkDestroyShaderModule(_device._logical, vertexShader, nullptr);
+			// Destroy shader modules. (no longer needed after creating the pipeline)
+			vkDestroyShaderModule(_device._logical, gBufferFragmentShader, nullptr);
+			vkDestroyShaderModule(_device._logical, gBufferVertexShader, nullptr);
+
+			// LIGHTING GRAPHICS PIPELINE
+
+			boost::container::vector<char> lightingVertexShaderRaw, lightingFragmentShaderRaw;
+			CHECK_RESULT(ReadShader("Shaders/Deferred/lighting.vert.spv", &lightingVertexShaderRaw), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(ReadShader("Shaders/Deferred/lighting.frag.spv", &lightingFragmentShaderRaw), RendererResult::Success, RendererResult::Failure)
+
+			// Create shader modules.
+			VkShaderModule lightingVertexShader, lightingFragmentShader;
+			CHECK_RESULT(CreateShaderModule(lightingVertexShaderRaw, &lightingVertexShader), RendererResult::Success, RendererResult::Failure)
+			CHECK_RESULT(CreateShaderModule(lightingFragmentShaderRaw, &lightingFragmentShader), RendererResult::Success, RendererResult::Failure)
+			
+			// Vertex stage creation information.
+			VkPipelineShaderStageCreateInfo lightingVertexCreateInfo = {};
+			lightingVertexCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			lightingVertexCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+			lightingVertexCreateInfo.module = lightingVertexShader;
+			lightingVertexCreateInfo.pName = "main";
+
+			// Fragment stage creation information.
+			VkPipelineShaderStageCreateInfo lightingFragmentCreateInfo = {};
+			lightingFragmentCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			lightingFragmentCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			lightingFragmentCreateInfo.module = lightingFragmentShader;
+			lightingFragmentCreateInfo.pName = "main";
+
+			// Assemble shader stages into an array.
+			boost::array<VkPipelineShaderStageCreateInfo, 2> lightingShaderStages = {
+				lightingVertexCreateInfo, lightingFragmentCreateInfo
+			};
+
+			// Remove vertex data for lighting pipeline.
+			gBufferVertexInputCreateInfo.vertexBindingDescriptionCount = 0;
+			gBufferVertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
+			gBufferVertexInputCreateInfo.vertexAttributeDescriptionCount = 0;
+			gBufferVertexInputCreateInfo.pVertexBindingDescriptions = nullptr;
+
+			// Remove writing to depth buffer.
+			gBufferDepthCreateInfo.depthWriteEnable = VK_FALSE;
+
+			// Blending attachment information.
+			VkPipelineColorBlendAttachmentState lightingBlendState = {};
+			lightingBlendState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+				VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			lightingBlendState.blendEnable = VK_FALSE;
+
+			// Blending stage creation information.
+			VkPipelineColorBlendStateCreateInfo lightingBlendCreateInfo = {};
+			lightingBlendCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			lightingBlendCreateInfo.logicOpEnable = VK_FALSE;
+			lightingBlendCreateInfo.attachmentCount = 1;
+			lightingBlendCreateInfo.pAttachments = &lightingBlendState;
+
+			// Assemble descriptor layouts into an array.
+			boost::array<VkDescriptorSetLayout, 2> lightingDescriptorSetLayouts = {
+				_gBufferDescriptorSetLayout, _lightingDescriptorSetLayout
+			};
+
+			// Pipeline layout stage creation information.
+			VkPipelineLayoutCreateInfo lightingPipelineLayoutCreateInfo = {};
+			lightingPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			lightingPipelineLayoutCreateInfo.setLayoutCount = static_cast<u32>(lightingDescriptorSetLayouts.size());
+			lightingPipelineLayoutCreateInfo.pSetLayouts = lightingDescriptorSetLayouts.data();
+			lightingPipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+			lightingPipelineLayoutCreateInfo.pPushConstantRanges = &_lightingPushConstantRange;
+
+			// Create pipeline layout.
+			CHECK_RESULT(vkCreatePipelineLayout(_device._logical, &lightingPipelineLayoutCreateInfo, nullptr, &_lightingPipelineLayout), VK_SUCCESS, RendererResult::Failure)
+
+			// Modify graphics pipeline information.
+			gBufferPipelineCreateInfo.stageCount = static_cast<u32>(lightingShaderStages.size());
+			gBufferPipelineCreateInfo.pStages = lightingShaderStages.data();
+			gBufferPipelineCreateInfo.pColorBlendState = &lightingBlendCreateInfo;
+			gBufferPipelineCreateInfo.layout = _lightingPipelineLayout;
+			gBufferPipelineCreateInfo.subpass = 1;
+
+			// Create lighting graphics pipeline.
+			CHECK_RESULT(vkCreateGraphicsPipelines(_device._logical, VK_NULL_HANDLE, 1, &gBufferPipelineCreateInfo, nullptr, &_lightingPipeline), VK_SUCCESS, RendererResult::Failure)
+
+			// Destroy shader modules. (no longer needed after creating the pipeline)
+			vkDestroyShaderModule(_device._logical, lightingFragmentShader, nullptr);
+			vkDestroyShaderModule(_device._logical, lightingVertexShader, nullptr);
 
 			return RendererResult::Success;
 		}
 
-		RendererResult Renderer::CreateDepthBufferImage()
+		RendererResult Renderer::CreateGBuffer()
 		{
-			_depthFormat = ChooseBestSupportedFormat(
-				{ VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D32_SFLOAT, VK_FORMAT_D24_UNORM_S8_UINT },
-				VK_IMAGE_TILING_OPTIMAL,
-				VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
-			);
+			// Resize the buffers to match with the swapchain output.
+			_colorBuffer.resize(_swapchainImages.size());
+			_depthBuffer.resize(_swapchainImages.size());
+			_normalBuffer.resize(_swapchainImages.size());
+			_positionBuffer.resize(_swapchainImages.size());
 
-			// Create and allocate image and view, using the appropriate depth stencil format.
-			CHECK_RESULT(CreateImage(_swapchainExtent.width, _swapchainExtent.height, _depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, &_depthBufferImage), RendererResult::Success, RendererResult::Failure);
-			CHECK_RESULT(AllocateImage(_depthBufferImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_depthBufferMemory), RendererResult::Success, RendererResult::Failure);
-			CHECK_RESULT(CreateImageView(_depthBufferImage, _depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, &_depthBufferImageView), RendererResult::Success, RendererResult::Failure);
+			// Choose the best formats for each buffer.
+			_colorFormat = ChooseBestSupportedFormat({ VK_FORMAT_B8G8R8A8_UNORM }, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT);
+			_depthFormat = ChooseBestSupportedFormat({ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
+				VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+			_normalFormat = ChooseBestSupportedFormat({ VK_FORMAT_R16G16B16A16_SFLOAT }, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT);
+			_positionFormat = ChooseBestSupportedFormat({ VK_FORMAT_R16G16B16A16_SFLOAT }, VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT);
+			
+			// Create the color buffer.
+			for (usize i = 0; i < _colorBuffer.size(); ++i)
+			{
+				CHECK_RESULT(CreateImage(_swapchainExtent.width, _swapchainExtent.height, _colorFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &_colorBuffer[i]._raw), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateImage(_colorBuffer[i]._raw, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_colorBuffer[i]._memory), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(CreateImageView(_colorBuffer[i]._raw, _colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, &_colorBuffer[i]._view), RendererResult::Success, RendererResult::Failure)
+			}
+
+			// Create the depth buffer.
+			for (usize i = 0; i < _depthBuffer.size(); ++i)
+			{
+				CHECK_RESULT(CreateImage(_swapchainExtent.width, _swapchainExtent.height, _depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &_depthBuffer[i]._raw), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateImage(_depthBuffer[i]._raw, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_depthBuffer[i]._memory), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(CreateImageView(_depthBuffer[i]._raw, _depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, &_depthBuffer[i]._view), RendererResult::Success, RendererResult::Failure)
+			}
+
+			// Create the normal buffer.
+			for (usize i = 0; i < _normalBuffer.size(); ++i)
+			{
+				CHECK_RESULT(CreateImage(_swapchainExtent.width, _swapchainExtent.height, _normalFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &_normalBuffer[i]._raw), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateImage(_normalBuffer[i]._raw, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_normalBuffer[i]._memory), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(CreateImageView(_normalBuffer[i]._raw, _normalFormat, VK_IMAGE_ASPECT_COLOR_BIT, &_normalBuffer[i]._view), RendererResult::Success, RendererResult::Failure)
+			}
+
+			// Create the position buffer.
+			for (usize i = 0; i < _positionBuffer.size(); ++i)
+			{
+				CHECK_RESULT(CreateImage(_swapchainExtent.width, _swapchainExtent.height, _positionFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &_positionBuffer[i]._raw), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateImage(_positionBuffer[i]._raw, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &_positionBuffer[i]._memory), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(CreateImageView(_positionBuffer[i]._raw, _positionFormat, VK_IMAGE_ASPECT_COLOR_BIT, &_positionBuffer[i]._view), RendererResult::Success, RendererResult::Failure)
+			}
+
 			return RendererResult::Success;
 		}
 
@@ -2038,9 +2297,8 @@ namespace Re
 			_swapchainFramebuffers.resize(_swapchainImages.size());
 			for (usize i = 0; i < _swapchainFramebuffers.size(); ++i)
 			{
-				boost::array<VkImageView, 2> attachments = {
-					_swapchainImages[i]._view,
-					_depthBufferImageView
+				boost::array<VkImageView, 5> attachments = {
+					_colorBuffer[i]._view, _depthBuffer[i]._view, _normalBuffer[i]._view, _positionBuffer[i]._view, _swapchainImages[i]._view
 				};
 
 				VkFramebufferCreateInfo createInfo = {};
@@ -2117,35 +2375,35 @@ namespace Re
 
 		RendererResult Renderer::CreateUniformBuffers()
 		{
-			VkDeviceSize vertexBufferSize = sizeof(VertexUniform);
-			VkDeviceSize fragmentBufferSize = sizeof(FragmentUniform);
-			VkDeviceSize fragmentDynamicBufferSize = GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment) * MAX_RENDERABLES;
+			VkDeviceSize cameraUniformBufferSize = sizeof(CameraUniform);
+			VkDeviceSize lightingUniformBufferSize = sizeof(LightingUniform);
+			VkDeviceSize materialUniformBufferSize = GetAlignedSize(sizeof(MaterialUniform), _minUniformBufferAlignment) * MAX_MATERIALS;
 
 			// Create one vertex uniform buffer for each swapchain image.
-			_vertexUniformBuffers.resize(_swapchainImages.size());
-			_vertexUniformBuffersMemory.resize(_swapchainImages.size());
-			for (usize i = 0; i < _vertexUniformBuffers.size(); ++i)
+			_cameraUniformBuffers.resize(_swapchainImages.size());
+			_cameraUniformBuffersMemory.resize(_swapchainImages.size());
+			for (usize i = 0; i < _cameraUniformBuffers.size(); ++i)
 			{
-				CHECK_RESULT(CreateBuffer(vertexBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_vertexUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
-				CHECK_RESULT(AllocateBuffer(_vertexUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_vertexUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
-			}
-
-			// Create one fragment uniform buffer for each swapchain image.
-			_fragmentUniformBuffers.resize(_swapchainImages.size());
-			_fragmentUniformBuffersMemory.resize(_swapchainImages.size());
-			for (usize i = 0; i < _fragmentUniformBuffers.size(); ++i)
-			{
-				CHECK_RESULT(CreateBuffer(fragmentBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_fragmentUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
-				CHECK_RESULT(AllocateBuffer(_fragmentUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_fragmentUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(CreateBuffer(cameraUniformBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_cameraUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateBuffer(_cameraUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_cameraUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
 			}
 
 			// Create one fragment dynamic uniform buffer for each swapchain image.
-			_fragmentDynamicUniformBuffers.resize(_swapchainImages.size());
-			_fragmentDynamicUniformBuffersMemory.resize(_swapchainImages.size());
-			for (usize i = 0; i < _fragmentDynamicUniformBuffers.size(); ++i)
+			_materialUniformBuffers.resize(_swapchainImages.size());
+			_materialUniformBuffersMemory.resize(_swapchainImages.size());
+			for (usize i = 0; i < _materialUniformBuffers.size(); ++i)
 			{
-				CHECK_RESULT(CreateBuffer(fragmentDynamicBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_fragmentDynamicUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
-				CHECK_RESULT(AllocateBuffer(_fragmentDynamicUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_fragmentDynamicUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(CreateBuffer(materialUniformBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_materialUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateBuffer(_materialUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_materialUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
+			}
+
+			// Create one fragment uniform buffer for each swapchain image.
+			_lightingUniformBuffers.resize(_swapchainImages.size());
+			_lightingUniformBuffersMemory.resize(_swapchainImages.size());
+			for (usize i = 0; i < _lightingUniformBuffers.size(); ++i)
+			{
+				CHECK_RESULT(CreateBuffer(lightingUniformBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &_lightingUniformBuffers[i]), RendererResult::Success, RendererResult::Failure)
+				CHECK_RESULT(AllocateBuffer(_lightingUniformBuffers[i], VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &_lightingUniformBuffersMemory[i]), RendererResult::Success, RendererResult::Failure)
 			}
 
 			return RendererResult::Success;
@@ -2153,26 +2411,21 @@ namespace Re
 
 		RendererResult Renderer::CreateDescriptorPools()
 		{
-			// BUFFER DESCRIPTOR POOL
+			// BUFFER DESCRIPTOR POOL (G-BUFFER PIPELINE)
 
-			// Information about pool for the vertex uniform descriptors.
-			VkDescriptorPoolSize vertexPoolSize = {};
-			vertexPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			vertexPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
+			// Information about pool for the camera uniform descriptors.
+			VkDescriptorPoolSize cameraPoolSize = {};
+			cameraPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			cameraPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
 
-			// Information about pool for the fragment uniform descriptors.
-			VkDescriptorPoolSize fragmentPoolSize = {};
-			fragmentPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			fragmentPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
-
-			// Information about pool for the fragment dynamic uniform descriptors.
-			VkDescriptorPoolSize fragmentDynamicPoolSize = {};
-			fragmentDynamicPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-			fragmentDynamicPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
+			// Information about pool for the material uniform descriptors.
+			VkDescriptorPoolSize materialPoolSize = {};
+			materialPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+			materialPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
 
 			// Assemble pool sizes into an array.
-			boost::array<VkDescriptorPoolSize, 3> poolSizes = {
-				vertexPoolSize, fragmentPoolSize, fragmentDynamicPoolSize
+			boost::array<VkDescriptorPoolSize, 2> poolSizes = {
+				cameraPoolSize, materialPoolSize
 			};
 
 			// Buffer descriptor pool creation information.
@@ -2184,7 +2437,7 @@ namespace Re
 
 			CHECK_RESULT(vkCreateDescriptorPool(_device._logical, &bufferPoolCreateInfo, nullptr, &_bufferDescriptorPool), VK_SUCCESS, RendererResult::Failure)
 			
-			// SAMPLER DESCRIPTOR POOL
+			// SAMPLER DESCRIPTOR POOL (G-BUFFER PIPELINE)
 
 			// Information about pool for the texture sampler descriptors.
 			VkDescriptorPoolSize samplerPoolSize = {};
@@ -2201,83 +2454,259 @@ namespace Re
 
 			CHECK_RESULT(vkCreateDescriptorPool(_device._logical, &samplerPoolCreateInfo, nullptr, &_samplerDescriptorPool), VK_SUCCESS, RendererResult::Failure)
 
+			// G-BUFFER DESCRIPTOR POOL (LIGHTING PIPELINE)
+
+			// Information about pool for the color image descriptors.
+			VkDescriptorPoolSize colorPoolSize = {};
+			colorPoolSize.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			colorPoolSize.descriptorCount = static_cast<u32>(_colorBuffer.size());
+
+			// Information about pool for the depth image descriptors.
+			VkDescriptorPoolSize depthPoolSize = {};
+			depthPoolSize.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			depthPoolSize.descriptorCount = static_cast<u32>(_depthBuffer.size());
+
+			// Information about pool for the normal image descriptors.
+			VkDescriptorPoolSize normalPoolSize = {};
+			normalPoolSize.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			normalPoolSize.descriptorCount = static_cast<u32>(_normalBuffer.size());
+
+			// Information about pool for the position image descriptors.
+			VkDescriptorPoolSize positionPoolSize = {};
+			positionPoolSize.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+			positionPoolSize.descriptorCount = static_cast<u32>(_positionBuffer.size());
+
+			// Assemble pool sizes into an array.
+			boost::array<VkDescriptorPoolSize, 4> gBufferPoolSizes = {
+				colorPoolSize, depthPoolSize, normalPoolSize, positionPoolSize
+			};
+
+			// G-buffer descriptor pool creation information.
+			VkDescriptorPoolCreateInfo gBufferPoolCreateInfo = {};
+			gBufferPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			gBufferPoolCreateInfo.maxSets = _swapchainImages.size();
+			gBufferPoolCreateInfo.poolSizeCount = static_cast<u32>(gBufferPoolSizes.size());
+			gBufferPoolCreateInfo.pPoolSizes = gBufferPoolSizes.data();
+
+			CHECK_RESULT(vkCreateDescriptorPool(_device._logical, &gBufferPoolCreateInfo, nullptr, &_gBufferDescriptorPool), VK_SUCCESS, RendererResult::Failure)
+
+			// LIGHTING DESCRIPTOR POOL (LIGHTING PIPELINE)
+
+			// Information about pool for the lighting descriptors.
+			VkDescriptorPoolSize lightingPoolSize = {};
+			lightingPoolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			lightingPoolSize.descriptorCount = static_cast<u32>(_swapchainImages.size());
+
+			// Lighting descriptor pool creation information.
+			VkDescriptorPoolCreateInfo lightingPoolCreateInfo = {};
+			lightingPoolCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			lightingPoolCreateInfo.maxSets = _swapchainImages.size();
+			lightingPoolCreateInfo.poolSizeCount = 1;
+			lightingPoolCreateInfo.pPoolSizes = &lightingPoolSize;
+
+			CHECK_RESULT(vkCreateDescriptorPool(_device._logical, &lightingPoolCreateInfo, nullptr, &_lightingDescriptorPool), VK_SUCCESS, RendererResult::Failure)
+
 			return RendererResult::Success;
 		}
 
 		RendererResult Renderer::CreateDescriptorSets()
 		{
+			// BUFFER DESCRIPTOR SETS (G-BUFFER PIPELINE)
+
 			// Setup a vector with layouts for each descriptor set created.
-			boost::container::vector<VkDescriptorSetLayout> setLayouts(_swapchainImages.size(), _bufferDescriptorSetLayout);
+			boost::container::vector<VkDescriptorSetLayout> bufferSetLayouts(_swapchainImages.size(), _bufferDescriptorSetLayout);
 
 			// Resize descriptor sets to match the uniform buffers they describe.
 			_bufferDescriptorSets.resize(_swapchainImages.size());
 
 			// Descriptor set allocation information.
-			VkDescriptorSetAllocateInfo allocateInfo = {};
-			allocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-			allocateInfo.descriptorPool = _bufferDescriptorPool;
-			allocateInfo.descriptorSetCount = static_cast<u32>(_swapchainImages.size());
-			allocateInfo.pSetLayouts = setLayouts.data();
+			VkDescriptorSetAllocateInfo bufferAllocateInfo = {};
+			bufferAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			bufferAllocateInfo.descriptorPool = _bufferDescriptorPool;
+			bufferAllocateInfo.descriptorSetCount = static_cast<u32>(_swapchainImages.size());
+			bufferAllocateInfo.pSetLayouts = bufferSetLayouts.data();
 
 			// Allocate descriptor sets.
-			CHECK_RESULT(vkAllocateDescriptorSets(_device._logical, &allocateInfo, _bufferDescriptorSets.data()), VK_SUCCESS, RendererResult::Failure)
+			CHECK_RESULT(vkAllocateDescriptorSets(_device._logical, &bufferAllocateInfo, _bufferDescriptorSets.data()), VK_SUCCESS, RendererResult::Failure)
 
 			// Create the vectors to store descriptor set update information.
-			boost::container::vector<VkDescriptorBufferInfo> descriptorBuffer;
-			boost::container::vector<VkWriteDescriptorSet> descriptorWrite;
+			boost::container::vector<VkDescriptorBufferInfo> bufferDescriptorBuffer;
+			boost::container::vector<VkWriteDescriptorSet> bufferDescriptorWrite;
 
-			// Resize vectors to fit every single descriptor set.
-			descriptorBuffer.resize(3 * _bufferDescriptorSets.size());
-			descriptorWrite.resize(3 * _bufferDescriptorSets.size());
+			// Resize vectors to fit every single descriptor.
+			bufferDescriptorBuffer.resize(2 * _bufferDescriptorSets.size());
+			bufferDescriptorWrite.resize(2 * _bufferDescriptorSets.size());
 
 			// Fill the information of the bindings between descriptor sets and uniform buffers.
 			for (usize i = 0; i < _bufferDescriptorSets.size(); ++i)
 			{
-				// Vertex descriptor buffer information.
-				descriptorBuffer[i].buffer = _vertexUniformBuffers[i];
-				descriptorBuffer[i].offset = 0;
-				descriptorBuffer[i].range = sizeof(VertexUniform);
+				// Camera descriptor buffer information.
+				bufferDescriptorBuffer[i].buffer = _cameraUniformBuffers[i];
+				bufferDescriptorBuffer[i].offset = 0;
+				bufferDescriptorBuffer[i].range = sizeof(CameraUniform);
 
-				// Vertex write descriptor set information.
-				descriptorWrite[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrite[i].dstSet = _bufferDescriptorSets[i];
-				descriptorWrite[i].dstBinding = 0;
-				descriptorWrite[i].dstArrayElement = 0;
-				descriptorWrite[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				descriptorWrite[i].descriptorCount = 1;
-				descriptorWrite[i].pBufferInfo = &descriptorBuffer[i];
+				// Camera write descriptor write information.
+				bufferDescriptorWrite[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				bufferDescriptorWrite[i].dstSet = _bufferDescriptorSets[i];
+				bufferDescriptorWrite[i].dstBinding = 0;
+				bufferDescriptorWrite[i].dstArrayElement = 0;
+				bufferDescriptorWrite[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				bufferDescriptorWrite[i].descriptorCount = 1;
+				bufferDescriptorWrite[i].pBufferInfo = &bufferDescriptorBuffer[i];
 
-				// Fragment descriptor buffer information.
-				descriptorBuffer[i + _bufferDescriptorSets.size()].buffer = _fragmentUniformBuffers[i];
-				descriptorBuffer[i + _bufferDescriptorSets.size()].offset = 0;
-				descriptorBuffer[i + _bufferDescriptorSets.size()].range = sizeof(FragmentUniform);
+				// Material descriptor buffer information.
+				bufferDescriptorBuffer[i + _bufferDescriptorSets.size()].buffer = _materialUniformBuffers[i];
+				bufferDescriptorBuffer[i + _bufferDescriptorSets.size()].offset = 0;
+				bufferDescriptorBuffer[i + _bufferDescriptorSets.size()].range = GetAlignedSize(sizeof(MaterialUniform), _minUniformBufferAlignment);
 
-				// Fragment write descriptor set information.
-				descriptorWrite[i + _bufferDescriptorSets.size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrite[i + _bufferDescriptorSets.size()].dstSet = _bufferDescriptorSets[i];
-				descriptorWrite[i + _bufferDescriptorSets.size()].dstBinding = 1;
-				descriptorWrite[i + _bufferDescriptorSets.size()].dstArrayElement = 0;
-				descriptorWrite[i + _bufferDescriptorSets.size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				descriptorWrite[i + _bufferDescriptorSets.size()].descriptorCount = 1;
-				descriptorWrite[i + _bufferDescriptorSets.size()].pBufferInfo = &descriptorBuffer[i + _bufferDescriptorSets.size()];
-
-				// Fragment dynamic descriptor buffer information.
-				descriptorBuffer[i + 2 * _bufferDescriptorSets.size()].buffer = _fragmentDynamicUniformBuffers[i];
-				descriptorBuffer[i + 2 * _bufferDescriptorSets.size()].offset = 0;
-				descriptorBuffer[i + 2 * _bufferDescriptorSets.size()].range = GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment);
-
-				// Fragment dynamic descriptor set information.
-				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].dstSet = _bufferDescriptorSets[i];
-				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].dstBinding = 2;
-				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].dstArrayElement = 0;
-				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].descriptorCount = 1;
-				descriptorWrite[i + 2 * _bufferDescriptorSets.size()].pBufferInfo = &descriptorBuffer[i + 2 * _bufferDescriptorSets.size()];
+				// Material descriptor write information.
+				bufferDescriptorWrite[i + _bufferDescriptorSets.size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				bufferDescriptorWrite[i + _bufferDescriptorSets.size()].dstSet = _bufferDescriptorSets[i];
+				bufferDescriptorWrite[i + _bufferDescriptorSets.size()].dstBinding = 1;
+				bufferDescriptorWrite[i + _bufferDescriptorSets.size()].dstArrayElement = 0;
+				bufferDescriptorWrite[i + _bufferDescriptorSets.size()].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+				bufferDescriptorWrite[i + _bufferDescriptorSets.size()].descriptorCount = 1;
+				bufferDescriptorWrite[i + _bufferDescriptorSets.size()].pBufferInfo = &bufferDescriptorBuffer[i + _bufferDescriptorSets.size()];
 			}
 
 			// Update the descriptor sets with the filled information.
-			vkUpdateDescriptorSets(_device._logical, descriptorWrite.size(), descriptorWrite.data(), 0, nullptr);
+			vkUpdateDescriptorSets(_device._logical, bufferDescriptorWrite.size(), bufferDescriptorWrite.data(), 0, nullptr);
+
+			// G-BUFFER DESCRIPTOR SETS (LIGHTING PIPELINE)
+
+			// Setup a vector with layouts for each descriptor set created.
+			boost::container::vector<VkDescriptorSetLayout> gBufferSetLayouts(_swapchainImages.size(), _gBufferDescriptorSetLayout);
+
+			// Resize descriptor sets to match the images they describe.
+			_gBufferDescriptorSets.resize(_swapchainImages.size());
+
+			// Descriptor set allocation information.
+			VkDescriptorSetAllocateInfo gBufferAllocateInfo = {};
+			gBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			gBufferAllocateInfo.descriptorPool = _gBufferDescriptorPool;
+			gBufferAllocateInfo.descriptorSetCount = _swapchainImages.size();
+			gBufferAllocateInfo.pSetLayouts = gBufferSetLayouts.data();
+
+			// Allocate descriptor sets.
+			CHECK_RESULT(vkAllocateDescriptorSets(_device._logical, &gBufferAllocateInfo, _gBufferDescriptorSets.data()), VK_SUCCESS, RendererResult::Failure)
+
+			// Create the vectors to store descriptor set update information.
+			boost::container::vector<VkDescriptorImageInfo> gBufferDescriptorImage;
+			boost::container::vector<VkWriteDescriptorSet> gBufferDescriptorWrite;
+
+			// Resize vectors to fit every single descriptor.
+			gBufferDescriptorImage.resize(4 * _gBufferDescriptorSets.size());
+			gBufferDescriptorWrite.resize(4 * _gBufferDescriptorSets.size());
+
+			// Fill the information of the bindings between descriptor sets and images.
+			for (usize i = 0; i < _gBufferDescriptorSets.size(); ++i)
+			{
+				// Color descriptor image information.
+				gBufferDescriptorImage[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				gBufferDescriptorImage[i].imageView = _colorBuffer[i]._view;
+				gBufferDescriptorImage[i].sampler = VK_NULL_HANDLE;
+
+				// Colour descriptor write information.
+				gBufferDescriptorWrite[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				gBufferDescriptorWrite[i].dstSet = _gBufferDescriptorSets[i];
+				gBufferDescriptorWrite[i].dstBinding = 0;
+				gBufferDescriptorWrite[i].dstArrayElement = 0;
+				gBufferDescriptorWrite[i].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+				gBufferDescriptorWrite[i].descriptorCount = 1;
+				gBufferDescriptorWrite[i].pImageInfo = &gBufferDescriptorImage[i];
+
+				// Depth descriptor image information.
+				gBufferDescriptorImage[i + _gBufferDescriptorSets.size()].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				gBufferDescriptorImage[i + _gBufferDescriptorSets.size()].imageView = _depthBuffer[i]._view;
+				gBufferDescriptorImage[i + _gBufferDescriptorSets.size()].sampler = VK_NULL_HANDLE;
+
+				// Depth descriptor write information.
+				gBufferDescriptorWrite[i + _gBufferDescriptorSets.size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				gBufferDescriptorWrite[i + _gBufferDescriptorSets.size()].dstSet = _gBufferDescriptorSets[i];
+				gBufferDescriptorWrite[i + _gBufferDescriptorSets.size()].dstBinding = 1;
+				gBufferDescriptorWrite[i + _gBufferDescriptorSets.size()].dstArrayElement = 0;
+				gBufferDescriptorWrite[i + _gBufferDescriptorSets.size()].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+				gBufferDescriptorWrite[i + _gBufferDescriptorSets.size()].descriptorCount = 1;
+				gBufferDescriptorWrite[i + _gBufferDescriptorSets.size()].pImageInfo = &gBufferDescriptorImage[i + _gBufferDescriptorSets.size()];
+
+				// Normal descriptor image information.
+				gBufferDescriptorImage[i + 2 * _gBufferDescriptorSets.size()].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				gBufferDescriptorImage[i + 2 * _gBufferDescriptorSets.size()].imageView = _normalBuffer[i]._view;
+				gBufferDescriptorImage[i + 2 * _gBufferDescriptorSets.size()].sampler = VK_NULL_HANDLE;
+
+				// Normal descriptor write information.
+				gBufferDescriptorWrite[i + 2 * _gBufferDescriptorSets.size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				gBufferDescriptorWrite[i + 2 * _gBufferDescriptorSets.size()].dstSet = _gBufferDescriptorSets[i];
+				gBufferDescriptorWrite[i + 2 * _gBufferDescriptorSets.size()].dstBinding = 2;
+				gBufferDescriptorWrite[i + 2 * _gBufferDescriptorSets.size()].dstArrayElement = 0;
+				gBufferDescriptorWrite[i + 2 * _gBufferDescriptorSets.size()].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+				gBufferDescriptorWrite[i + 2 * _gBufferDescriptorSets.size()].descriptorCount = 1;
+				gBufferDescriptorWrite[i + 2 * _gBufferDescriptorSets.size()].pImageInfo = &gBufferDescriptorImage[i + 2 * _gBufferDescriptorSets.size()];
+
+				// Position descriptor image information.
+				gBufferDescriptorImage[i + 3 * _gBufferDescriptorSets.size()].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				gBufferDescriptorImage[i + 3 * _gBufferDescriptorSets.size()].imageView = _positionBuffer[i]._view;
+				gBufferDescriptorImage[i + 3 * _gBufferDescriptorSets.size()].sampler = VK_NULL_HANDLE;
+
+				// Position descriptor write information.
+				gBufferDescriptorWrite[i + 3 * _gBufferDescriptorSets.size()].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				gBufferDescriptorWrite[i + 3 * _gBufferDescriptorSets.size()].dstSet = _gBufferDescriptorSets[i];
+				gBufferDescriptorWrite[i + 3 * _gBufferDescriptorSets.size()].dstBinding = 3;
+				gBufferDescriptorWrite[i + 3 * _gBufferDescriptorSets.size()].dstArrayElement = 0;
+				gBufferDescriptorWrite[i + 3 * _gBufferDescriptorSets.size()].descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+				gBufferDescriptorWrite[i + 3 * _gBufferDescriptorSets.size()].descriptorCount = 1;
+				gBufferDescriptorWrite[i + 3 * _gBufferDescriptorSets.size()].pImageInfo = &gBufferDescriptorImage[i + 3 * _gBufferDescriptorSets.size()];
+			}
+
+			// Update the descriptor sets with the filled information.
+			vkUpdateDescriptorSets(_device._logical, static_cast<u32>(gBufferDescriptorWrite.size()), gBufferDescriptorWrite.data(), 0, nullptr);
+
+			// LIGHTING DESCRIPTOR SETS (LIGHTING PIPELINE)
+
+			// Setup a vector with layouts for each descriptor set created.
+			boost::container::vector<VkDescriptorSetLayout> lightingSetLayouts(_swapchainImages.size(), _lightingDescriptorSetLayout);
+
+			// Resize descriptor sets to match the images they describe.
+			_lightingDescriptorSets.resize(_swapchainImages.size());
+
+			// Descriptor set allocation information.
+			VkDescriptorSetAllocateInfo lightingAllocateInfo = {};
+			lightingAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			lightingAllocateInfo.descriptorPool = _lightingDescriptorPool;
+			lightingAllocateInfo.descriptorSetCount = _swapchainImages.size();
+			lightingAllocateInfo.pSetLayouts = lightingSetLayouts.data();
+
+			// Allocate descriptor sets.
+			CHECK_RESULT(vkAllocateDescriptorSets(_device._logical, &lightingAllocateInfo, _lightingDescriptorSets.data()), VK_SUCCESS, RendererResult::Failure)
+
+			// Create the vectors to store descriptor set update information.
+			boost::container::vector<VkDescriptorBufferInfo> lightingDescriptorBuffer;
+			boost::container::vector<VkWriteDescriptorSet> lightingDescriptorWrite;
+
+			// Resize vectors to fit every single descriptor.
+			lightingDescriptorBuffer.resize(_lightingDescriptorSets.size());
+			lightingDescriptorWrite.resize(_lightingDescriptorSets.size());
+
+			// Fill the information of the bindings between descriptor sets and buffers.
+			for (usize i = 0; i < _lightingDescriptorSets.size(); ++i)
+			{
+				// Fragment descriptor buffer information.
+				lightingDescriptorBuffer[i].buffer = _lightingUniformBuffers[i];
+				lightingDescriptorBuffer[i].offset = 0;
+				lightingDescriptorBuffer[i].range = sizeof(LightingUniform);
+
+				// Fragment write descriptor write information.
+				lightingDescriptorWrite[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				lightingDescriptorWrite[i].dstSet = _lightingDescriptorSets[i];
+				lightingDescriptorWrite[i].dstBinding = 0;
+				lightingDescriptorWrite[i].dstArrayElement = 0;
+				lightingDescriptorWrite[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				lightingDescriptorWrite[i].descriptorCount = 1;
+				lightingDescriptorWrite[i].pBufferInfo = &lightingDescriptorBuffer[i];
+			}
+
+			// Update the descriptor sets with the filled information.
+			vkUpdateDescriptorSets(_device._logical, lightingDescriptorWrite.size(), lightingDescriptorWrite.data(), 0, nullptr);
 
 			return RendererResult::Success;
 		}
@@ -2340,9 +2769,12 @@ namespace Re
 			bufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
 			// Define the values to clear the framebuffer attachments with.
-			boost::array<VkClearValue, 2> clearValues = {};
+			boost::array<VkClearValue, 5> clearValues = {};
 			clearValues[0].color = Math::Colors::Black;
 			clearValues[1].depthStencil.depth = 1.0f;
+			clearValues[2].color = Math::Colors::Black;
+			clearValues[3].color = Math::Colors::Black;
+			clearValues[4].color = Math::Colors::Black;
 
 			// Information about to begin a render pass.
 			VkRenderPassBeginInfo passBeginInfo = {};
@@ -2375,7 +2807,8 @@ namespace Re
 				
 				if (_entitiesToRender.size() > 0)
 				{
-					vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _graphicsPipeline);
+					// Bind the G-Buffer graphics pipeline to render geometry.
+					vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _gBufferPipeline);
 
 					usize j = 0;
 					for (auto& entity : _entitiesToRender)
@@ -2383,13 +2816,13 @@ namespace Re
 						// Retrieve the entity information.
 						const EntityInfo& entityInfo = entity.second;
 
-						// Create vertex push constant from object and camera information.
-						VertexPush vp = {};
-						vp._model = entityInfo._transformComponent ? entityInfo._transformComponent->GetModel() : Math::Matrix::Identity();
-						vp._view = _activeCamera ? _activeCamera->GetView() : Math::Matrix::Identity();
+						// Create G-buffer push constant from object and camera information.
+						GBufferPush gBufferPush = {};
+						gBufferPush._model = entityInfo._transformComponent ? entityInfo._transformComponent->GetModel() : Math::Matrix::Identity();
+						gBufferPush._view = _activeCamera ? _activeCamera->GetView() : Math::Matrix::Identity();
 
 						// Push constants into the shaders.
-						vkCmdPushConstants(_commandBuffers[i], _pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VertexPush), &vp);
+						vkCmdPushConstants(_commandBuffers[i], _gBufferPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GBufferPush), &gBufferPush);
 
 						for (auto& renderableInfo : entityInfo._renderables)
 						{
@@ -2405,16 +2838,16 @@ namespace Re
 							vkCmdBindIndexBuffer(_commandBuffers[i], indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 							// Configure dynamic offsets for dynamic buffers.
-							u32 dynamicOffset = static_cast<u32>(GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment)) * j;
+							u32 dynamicOffset = static_cast<u32>(GetAlignedSize(sizeof(MaterialUniform), _minUniformBufferAlignment)) * j;
 
 							// Assemble descriptor sets into a single array.
-							boost::array<VkDescriptorSet, 2> descriptorSets = {
+							boost::array<VkDescriptorSet, 2> gBufferDescriptorSets = {
 								_bufferDescriptorSets[i], _textureDescriptorSets[diffuseImage]
 							};
 
 							// Bind descriptor sets.
-							vkCmdBindDescriptorSets(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _pipelineLayout,
-								0, descriptorSets.size(), descriptorSets.data(), 1, &dynamicOffset);
+							vkCmdBindDescriptorSets(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _gBufferPipelineLayout,
+								0, gBufferDescriptorSets.size(), gBufferDescriptorSets.data(), 1, &dynamicOffset);
 
 							// Add rendering commands to the buffer.
 							vkCmdDrawIndexed(_commandBuffers[i], indexCount, 1, 0, 0, 0);
@@ -2423,10 +2856,33 @@ namespace Re
 					}
 				}
 
-				vkCmdEndRenderPass(_commandBuffers[i]);
-
 				// Release mutex after recording commands for this frame.
 				_transferMutex.unlock();
+
+				// Start the second subpass and bind the lighting graphics pipeline.
+				vkCmdNextSubpass(_commandBuffers[i], VK_SUBPASS_CONTENTS_INLINE);
+				vkCmdBindPipeline(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _lightingPipeline);
+
+				// Create lighting push constant from object and camera information.
+				LightingPush lightingPush = {};
+				lightingPush._eyePosition = _activeCamera ? _activeCamera->GetTransform()->GetPosition() : Math::Vector3(0.0f);
+
+				// Push constants into the shaders.
+				vkCmdPushConstants(_commandBuffers[i], _lightingPipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(LightingPush), &lightingPush);
+
+				// Assemble descriptor sets into a single array.
+				boost::array<VkDescriptorSet, 2> lightingDescriptorSets = {
+					_gBufferDescriptorSets[i], _lightingDescriptorSets[i]
+				};
+
+				// Bind the G-buffer descriptor sets.
+				vkCmdBindDescriptorSets(_commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, _lightingPipelineLayout,
+					0, static_cast<u32>(lightingDescriptorSets.size()), lightingDescriptorSets.data(), 0, nullptr);
+
+				// Request drawing operation to force fragment shader execution.
+				vkCmdDraw(_commandBuffers[i], 3, 1, 0, 0);
+
+				vkCmdEndRenderPass(_commandBuffers[i]);
 
 				CHECK_RESULT(vkEndCommandBuffer(_commandBuffers[i]), VK_SUCCESS, RendererResult::Failure)
 			}
@@ -2434,7 +2890,7 @@ namespace Re
 			return RendererResult::Success;
 		}
 
-		void Renderer::UpdateDirectionalLight(FragmentUniform::FragmentDirectionalLight* dstLight, const boost::shared_ptr<Entities::DirectionalLight>& srcLight)
+		void Renderer::UpdateDirectionalLight(LightingUniform::FragmentDirectionalLight* dstLight, const boost::shared_ptr<Entities::DirectionalLight>& srcLight)
 		{
 			dstLight->_base._color = srcLight->GetColor();
 			dstLight->_base._ambientStrength = srcLight->GetAmbientStrength();
@@ -2442,7 +2898,7 @@ namespace Re
 			dstLight->_direction = srcLight->GetDirection();
 		}
 
-		void Renderer::UpdatePointLight(FragmentUniform::FragmentPointLight* dstLight, const boost::shared_ptr<Entities::PointLight>& srcLight)
+		void Renderer::UpdatePointLight(LightingUniform::FragmentPointLight* dstLight, const boost::shared_ptr<Entities::PointLight>& srcLight)
 		{
 			dstLight->_base._color = srcLight->GetColor();
 			dstLight->_base._ambientStrength = srcLight->GetAmbientStrength();
@@ -2453,53 +2909,53 @@ namespace Re
 			dstLight->_quadraticAttenuation = srcLight->GetQuadraticAttenuation();
 		}
 
-		void Renderer::UpdateSpotLight(FragmentUniform::FragmentSpotLight* dstLight, const boost::shared_ptr<Entities::SpotLight>& srcLight)
+		void Renderer::UpdateSpotLight(LightingUniform::FragmentSpotLight* dstLight, const boost::shared_ptr<Entities::SpotLight>& srcLight)
 		{
 			UpdatePointLight(&dstLight->_base, srcLight);
 			dstLight->_direction = srcLight->GetDirection();
 			dstLight->_cutoffAngle = cosf(Math::ToRadians(srcLight->GetCutoffAngle()));
 		}
 
-		void Renderer::UpdateVertexUniformBuffers()
+		void Renderer::UpdateCameraUniformBuffers()
 		{
-			for (usize i = 0; i < _vertexUniformBuffersMemory.size(); ++i)
+			for (usize i = 0; i < _cameraUniformBuffersMemory.size(); ++i)
 			{
 				// Map pointer to buffer location.
 				void* data;
-				vkMapMemory(_device._logical, _vertexUniformBuffersMemory[i], 0, sizeof(VertexUniform), 0, &data);
+				vkMapMemory(_device._logical, _cameraUniformBuffersMemory[i], 0, sizeof(CameraUniform), 0, &data);
 
 				// Transfer data to buffer memory.
-				Memory::Copy(data, &_vertexUniform, sizeof(VertexUniform));
+				Memory::Copy(data, &_vertexUniform, sizeof(CameraUniform));
 
 				// Unmap memory from pointer.
-				vkUnmapMemory(_device._logical, _vertexUniformBuffersMemory[i]);
+				vkUnmapMemory(_device._logical, _cameraUniformBuffersMemory[i]);
 			}
 		}
 
-		void Renderer::UpdateFragmentUniformBuffers()
+		void Renderer::UpdateLightingUniformBuffers()
 		{
-			for (usize i = 0; i < _fragmentUniformBuffersMemory.size(); ++i)
+			for (usize i = 0; i < _lightingUniformBuffersMemory.size(); ++i)
 			{
 				// Map pointer to buffer location.
 				void* data;
-				vkMapMemory(_device._logical, _fragmentUniformBuffersMemory[i], 0, sizeof(FragmentUniform), 0, &data);
+				vkMapMemory(_device._logical, _lightingUniformBuffersMemory[i], 0, sizeof(LightingUniform), 0, &data);
 
 				// Transfer data to buffer memory.
-				Memory::Copy(data, &_fragmentUniform, sizeof(FragmentUniform));
+				Memory::Copy(data, &_fragmentUniform, sizeof(LightingUniform));
 
 				// Unmap memory from pointer.
-				vkUnmapMemory(_device._logical, _fragmentUniformBuffersMemory[i]);
+				vkUnmapMemory(_device._logical, _lightingUniformBuffersMemory[i]);
 			}
 		}
 
-		void Renderer::UpdateFragmentDynamicUniformBuffers()
+		void Renderer::UpdateMaterialUniformBuffers()
 		{
-			const usize uniformAlignment = GetAlignedSize(sizeof(FragmentDynamicUniform), _minUniformBufferAlignment);
-			for (usize i = 0; i < _fragmentDynamicUniformBuffersMemory.size(); ++i)
+			const usize uniformAlignment = GetAlignedSize(sizeof(MaterialUniform), _minUniformBufferAlignment);
+			for (usize i = 0; i < _materialUniformBuffersMemory.size(); ++i)
 			{
 				// Map pointer to buffer location.
 				void* data;
-				vkMapMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[i], 0, uniformAlignment *
+				vkMapMemory(_device._logical, _materialUniformBuffersMemory[i], 0, uniformAlignment *
 					_entitiesToRender.size() + _entitiesToTransfer.size(), 0, &data);
 
 				// Copy entity data over to fragment dynamic buffer.
@@ -2509,16 +2965,13 @@ namespace Re
 					for (auto& renderableInfo : entity.second._renderables)
 					{
 						// Construct data to place into shader.
-						FragmentDynamicUniform::FragmentMaterial material = {};
+						MaterialUniform material = {};
 						material._specularPower = renderableInfo._material->GetSpecularPower();
 						material._specularStrength = renderableInfo._material->GetSpecularStrength();
 
-						FragmentDynamicUniform dynamicUniform = {};
-						dynamicUniform._material = material;
-
 						// Read memory with specified alignment.
-						FragmentDynamicUniform* dynamicMemory = (FragmentDynamicUniform*)((usize)data + (j * uniformAlignment));
-						*dynamicMemory = dynamicUniform;
+						MaterialUniform* dynamicMemory = (MaterialUniform*)((usize)data + (j * uniformAlignment));
+						*dynamicMemory = material;
 
 						// Move index over to next dynamic uniform location.
 						j++;
@@ -2526,7 +2979,7 @@ namespace Re
 				}
 
 				// Unmap memory from pointer.
-				vkUnmapMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[i]);
+				vkUnmapMemory(_device._logical, _materialUniformBuffersMemory[i]);
 			}
 		}
 		
@@ -2563,11 +3016,61 @@ namespace Re
 			vkDestroySwapchainKHR(_device._logical, _swapchain, nullptr);
 		}
 
-		void Renderer::DestroyDepthBufferImage()
+		void Renderer::DestroyDescriptorSetLayouts()
 		{
-			vkDestroyImageView(_device._logical, _depthBufferImageView, nullptr);
-			vkDestroyImage(_device._logical, _depthBufferImage, nullptr);
-			vkFreeMemory(_device._logical, _depthBufferMemory, nullptr);
+			// Destroy layouts associated with the lighting pipeline.
+			vkDestroyDescriptorSetLayout(_device._logical, _gBufferDescriptorSetLayout, nullptr);
+			vkDestroyDescriptorSetLayout(_device._logical, _lightingDescriptorSetLayout, nullptr);
+
+			// Destroy layouts associated with the G-buffer pipeline.
+			vkDestroyDescriptorSetLayout(_device._logical, _samplerDescriptorSetLayout, nullptr);
+			vkDestroyDescriptorSetLayout(_device._logical, _bufferDescriptorSetLayout, nullptr);
+		}
+
+		void Renderer::DestroyGraphicsPipelines()
+		{
+			// Destroy the G-buffer graphics pipeline.
+			vkDestroyPipeline(_device._logical, _gBufferPipeline, nullptr);
+			vkDestroyPipelineLayout(_device._logical, _gBufferPipelineLayout, nullptr);
+
+			// Destroy the lighting graphics pipeline.
+			vkDestroyPipeline(_device._logical, _lightingPipeline, nullptr);
+			vkDestroyPipelineLayout(_device._logical, _lightingPipelineLayout, nullptr);
+		}
+
+		void Renderer::DestroyGBuffer()
+		{
+			// Destroy the color buffer.
+			for (usize i = 0; i < _colorBuffer.size(); ++i)
+			{
+				vkDestroyImageView(_device._logical, _colorBuffer[i]._view, nullptr);
+				vkDestroyImage(_device._logical, _colorBuffer[i]._raw, nullptr);
+				vkFreeMemory(_device._logical, _colorBuffer[i]._memory, nullptr);
+			}
+
+			// Destroy the depth buffer.
+			for (usize i = 0; i < _depthBuffer.size(); ++i)
+			{
+				vkDestroyImageView(_device._logical, _depthBuffer[i]._view, nullptr);
+				vkDestroyImage(_device._logical, _depthBuffer[i]._raw, nullptr);
+				vkFreeMemory(_device._logical, _depthBuffer[i]._memory, nullptr);
+			}
+
+			// Destroy the normal buffer.
+			for (usize i = 0; i < _normalBuffer.size(); ++i)
+			{
+				vkDestroyImageView(_device._logical, _normalBuffer[i]._view, nullptr);
+				vkDestroyImage(_device._logical, _normalBuffer[i]._raw, nullptr);
+				vkFreeMemory(_device._logical, _normalBuffer[i]._memory, nullptr);
+			}
+
+			// Destroy the position buffer.
+			for (usize i = 0; i < _positionBuffer.size(); ++i)
+			{
+				vkDestroyImageView(_device._logical, _positionBuffer[i]._view, nullptr);
+				vkDestroyImage(_device._logical, _positionBuffer[i]._raw, nullptr);
+				vkFreeMemory(_device._logical, _positionBuffer[i]._memory, nullptr);
+			}
 		}
 
 		void Renderer::DestroyFramebuffers()
@@ -2591,26 +3094,37 @@ namespace Re
 
 		void Renderer::DestroyUniformBuffers()
 		{
-			// Destroy vertex uniform buffers.
-			for (usize i = 0; i < _vertexUniformBuffers.size(); ++i)
+			// Destroy lighting uniform buffers.
+			for (usize i = 0; i < _lightingUniformBuffers.size(); ++i)
 			{
-				vkDestroyBuffer(_device._logical, _vertexUniformBuffers[i], nullptr);
-				vkFreeMemory(_device._logical, _vertexUniformBuffersMemory[i], nullptr);
+				vkDestroyBuffer(_device._logical, _lightingUniformBuffers[i], nullptr);
+				vkFreeMemory(_device._logical, _lightingUniformBuffersMemory[i], nullptr);
 			}
 
-			// Destroy fragment uniform buffers.
-			for (usize i = 0; i < _fragmentUniformBuffers.size(); ++i)
+			// Destroy material uniform buffers.
+			for (usize i = 0; i < _materialUniformBuffers.size(); ++i)
 			{
-				vkDestroyBuffer(_device._logical, _fragmentUniformBuffers[i], nullptr);
-				vkFreeMemory(_device._logical, _fragmentUniformBuffersMemory[i], nullptr);
+				vkDestroyBuffer(_device._logical, _materialUniformBuffers[i], nullptr);
+				vkFreeMemory(_device._logical, _materialUniformBuffersMemory[i], nullptr);
 			}
 
-			// Destroy fragment dynamic uniform buffers.
-			for (usize i = 0; i < _fragmentDynamicUniformBuffers.size(); ++i)
+			// Destroy camera uniform buffers.
+			for (usize i = 0; i < _cameraUniformBuffers.size(); ++i)
 			{
-				vkDestroyBuffer(_device._logical, _fragmentDynamicUniformBuffers[i], nullptr);
-				vkFreeMemory(_device._logical, _fragmentDynamicUniformBuffersMemory[i], nullptr);
+				vkDestroyBuffer(_device._logical, _cameraUniformBuffers[i], nullptr);
+				vkFreeMemory(_device._logical, _cameraUniformBuffersMemory[i], nullptr);
 			}
+		}
+
+		void Renderer::DestroyDescriptorPools()
+		{
+			// Destroy descriptor pools associated with the lighting pipeline.
+			vkDestroyDescriptorPool(_device._logical, _gBufferDescriptorPool, nullptr);
+			vkDestroyDescriptorPool(_device._logical, _lightingDescriptorPool, nullptr);
+
+			// Destroy descriptor pools associated with the g-buffer pipeline.
+			vkDestroyDescriptorPool(_device._logical, _samplerDescriptorPool, nullptr);
+			vkDestroyDescriptorPool(_device._logical, _bufferDescriptorPool, nullptr);
 		}
 
 		#if PLATFORM_WINDOWS

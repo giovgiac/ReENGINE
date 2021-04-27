@@ -84,9 +84,9 @@ int main()
 		camera->GetTransform()->Translate(0.0f, 2.0f, 16.0f);
 
 		// TEST CODE: Create lights to illuminate the world.
-		// auto directionalLight = world.SpawnEntity<Entities::DirectionalLight>(Math::Colors::LightYellow, Math::Vector3(2.0f, 1.0f, -2.0f), 0.0f, 0.1f);
-		// auto pointLight0 = world.SpawnEntity<Entities::PointLight>(Math::Colors::RoyalBlue, Math::Vector3(0.0f, 1.0f, 0.0f), 0.0f, 0.5f, 0.5f, 0.3f);
-		auto spotLight0 = world.SpawnEntity<Entities::SpotLight>(Math::Colors::GhostWhite, Math::Vector3(0.0f, 2.0f, 16.0f), Math::Vector3(0.0f, 0.0f, -1.0f), 30.0f, 0.25f, 1.0f, 0.05f, 0.025f);
+		// auto directionalLight = world.SpawnEntity<Entities::DirectionalLight>(Math::Colors::LightYellow, Math::Vector3(2.0f, 1.0f, -2.0f), 0.05f, 1.0f);
+		// auto pointLight0 = world.SpawnEntity<Entities::PointLight>(Math::Colors::RoyalBlue, Math::Vector3(0.0f, 1.0f, 0.0f), 0.0f, 1.0f, 0.2f, 0.1f);
+		auto spotLight0 = world.SpawnEntity<Entities::SpotLight>(Math::Colors::GhostWhite, Math::Vector3(0.0f, 2.0f, 16.0f), Math::Vector3(0.0f, 0.0f, -1.0f), 30.0f, 0.25f, 1.0f, 0.1f, 0.05f);
 		camera->GetTransform()->OnTransformChanged.connect([camera, spotLight0]() {
 			spotLight0->SetPosition(camera->GetTransform()->GetPosition());
 			spotLight0->SetDirection(camera->GetTransform()->GetTransform().Forward());
@@ -97,7 +97,7 @@ int main()
 		auto texture1 = boost::make_shared<Graphics::Texture>("Textures/dirt.png");
 
 		// TEST CODE: Create some test materials.
-		auto material0 = boost::make_shared<Graphics::Material>(64.0f, 1.0f, texture0);
+		auto material0 = boost::make_shared<Graphics::Material>(32.0f, 1.0f, texture0);
 		auto material1 = boost::make_shared<Graphics::Material>(2.0f, 0.25f, texture1);
 		auto material2 = boost::make_shared<Graphics::Material>(1.0f, 0.0f);
 
@@ -124,6 +124,11 @@ int main()
 		auto model1 = world.SpawnEntity<Entities::Model>("Models/x-wing.obj");
 		model1->GetTransform()->Translate(-14.0f, 0.5f, 6.0f);
 		model1->GetTransform()->Scale(0.01f);
+
+		//auto scene = world.SpawnEntity<Entities::Model>("Models/scene.obj");
+
+		//auto terrain = world.SpawnEntity<Entities::Model>("Models/terrain.obj");
+		//terrain->GetTransform()->Scale(0.5);
 	}
 
 	// Run the main loop of the engine.
